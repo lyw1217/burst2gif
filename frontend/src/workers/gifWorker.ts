@@ -3,23 +3,19 @@ import { WorkerInMessage, WorkerOutMessage } from '../types/worker';
 import { createOutputSink, OutputSink } from '../modules/OutputSink';
 
 let currentSink: OutputSink | null = null;
-let isCancelled = false;
+let cancelRequested = false;
 
 self.onmessage = async (e: MessageEvent<WorkerInMessage>) => {
   const msg = e.data;
 
   if (msg.type === 'CANCEL') {
-    isCancelled = true;
-    if (currentSink) {
-      await currentSink.abort();
-      currentSink = null;
-    }
-    self.postMessage({ type: 'CANCELLED' } as WorkerOutMessage);
+    // 안전한 취소 플래그 설정: 비동기 IO 중간에 sink를 null로 만들어 크래시나는 현상 방지
+    cancelRequested = true;
     return;
   }
 
   if (msg.type === 'START') {
-    isCancelled = false;
+    cancelRequested = false;
     const { files, options } = msg;
     const startTime = performance.now();
 
@@ -39,11 +35,16 @@ self.onmessage = async (e: MessageEvent<WorkerInMessage>) => {
 
       // 3. 스트리밍 GIFEncoder 초기화
       const encoder = GIFEncoder();
-      let lastOffset = 0;
 
       // 4. Decode Concurrency = 1 (한 번에 1장씩 순차 스트리밍 처리)
       for (let i = 0; i < files.length; i++) {
-        if (isCancelled) {
+        // 프레임 경계에서 취소 플래그 확인
+        if (cancelRequested) {
+          if (currentSink) {
+            await currentSink.abort();
+            currentSink = null;
+          }
+          self.postMessage({ type: 'CANCELLED' } as WorkerOutMessage);
           return;
         }
 
@@ -61,14 +62,21 @@ self.onmessage = async (e: MessageEvent<WorkerInMessage>) => {
             resizeQuality: 'medium',
           });
         } catch (decodeErr: any) {
-          // 손상된 이미지 개별 예외 처리
           throw new Error(`[${i + 1}번째 사진 오류] ${file.name} 디코딩 실패: ${decodeErr.message}`);
+        }
+
+        if (cancelRequested) {
+          bitmap.close();
+          if (currentSink) {
+            await currentSink.abort();
+            currentSink = null;
+          }
+          self.postMessage({ type: 'CANCELLED' } as WorkerOutMessage);
+          return;
         }
 
         // 4-2. 캔버스 초기화 및 프레임 렌더링 (contain / cover)
         ctx.clearRect(0, 0, targetWidth, targetHeight);
-
-        // 기본 배경색(투명 또는 검정)
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, targetWidth, targetHeight);
 
@@ -81,14 +89,12 @@ self.onmessage = async (e: MessageEvent<WorkerInMessage>) => {
         let drawH = targetHeight;
 
         if (fitMode === 'cover') {
-          // 화면 꽉 채우기 (크롭)
           const scale = Math.max(targetWidth / bmpW, targetHeight / bmpH);
           drawW = bmpW * scale;
           drawH = bmpH * scale;
           drawX = (targetWidth - drawW) / 2;
           drawY = (targetHeight - drawH) / 2;
         } else {
-          // 화면에 맞추기 (contain - 기본값)
           const scale = Math.min(targetWidth / bmpW, targetHeight / bmpH);
           drawW = bmpW * scale;
           drawH = bmpH * scale;
@@ -113,36 +119,68 @@ self.onmessage = async (e: MessageEvent<WorkerInMessage>) => {
         encoder.writeFrame(indexedPixels, targetWidth, targetHeight, {
           palette,
           delay: delayMs,
-          repeat: i === 0 ? loop : undefined, // 첫 프레임에 loop 속성 기록
+          repeat: i === 0 ? loop : undefined,
         });
 
-        // 4-6. 새로 기록된 바이트 청크를 OutputSink(OPFS)에 스트리밍 플러시
-        const fullBytes = encoder.bytesView();
-        if (fullBytes.length > lastOffset) {
-          const newChunk = fullBytes.subarray(lastOffset);
-          await currentSink.write(newChunk);
-          lastOffset = fullBytes.length;
+        // 4-6. [P0 핵심 해결] 방금 생성된 바이트 청크만 OPFS에 스트리밍 플러시하고 버퍼 즉시 리셋!
+        const stream = encoder.stream as any;
+        const chunk: Uint8Array = stream.bytesView();
+        if (chunk.length > 0 && currentSink) {
+          await currentSink.write(chunk);
+        }
+        // 인코더 내부 byte writer 버퍼만 0으로 비움 (GIF 인코딩 상태는 온전히 유지)
+        stream.reset();
+
+        if (cancelRequested) {
+          if (currentSink) {
+            await currentSink.abort();
+            currentSink = null;
+          }
+          self.postMessage({ type: 'CANCELLED' } as WorkerOutMessage);
+          return;
         }
 
-        // 4-7. 진행률 메시지 전송 (메인 스레드에 장수 및 현재 용량 전달)
+        // 4-7. 진행률 및 동적 예상 용량 계산
+        const bytesWrittenSoFar = currentSink ? currentSink.getBytesWritten() : 0;
+        let estimatedTotalBytes: number | undefined;
+        if (i >= 2) {
+          // 3번째 프레임부터 평균 프레임 크기 기반 총 용량 추정
+          const avgPerFrame = bytesWrittenSoFar / (i + 1);
+          estimatedTotalBytes = Math.round(avgPerFrame * files.length);
+        }
+
         self.postMessage({
           type: 'PROGRESS',
           currentFrame: i + 1,
           totalFrames: files.length,
-          currentBytes: currentSink.getBytesWritten(),
+          currentBytes: bytesWrittenSoFar,
+          estimatedTotalBytes,
           fileName: file.name,
         } as WorkerOutMessage);
       }
 
-      // 5. 인코딩 종료 플러시
+      // 5. 인코딩 종료 플러시 (트레일러 바이트 0x3B 기록)
       encoder.finish();
-      const finalBytes = encoder.bytesView();
-      if (finalBytes.length > lastOffset) {
-        const remainingChunk = finalBytes.subarray(lastOffset);
-        await currentSink.write(remainingChunk);
+      const endStream = encoder.stream as any;
+      const finalTrailer: Uint8Array = endStream.bytesView();
+      if (finalTrailer.length > 0 && currentSink) {
+        await currentSink.write(finalTrailer);
+      }
+      endStream.reset();
+
+      if (cancelRequested) {
+        if (currentSink) {
+          await currentSink.abort();
+          currentSink = null;
+        }
+        self.postMessage({ type: 'CANCELLED' } as WorkerOutMessage);
+        return;
       }
 
       // 6. 최종 파일 반환
+      if (!currentSink) {
+        throw new Error('출력 파일 스트림이 존재하지 않습니다.');
+      }
       const finalBlob = await currentSink.finalize();
       const isOPFS = currentSink.isUsingOPFS();
       currentSink = null;

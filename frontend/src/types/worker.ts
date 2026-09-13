@@ -21,6 +21,7 @@ export interface ProgressMessage {
   currentFrame: number;
   totalFrames: number;
   currentBytes: number;
+  estimatedTotalBytes?: number;
   fileName: string;
 }
 

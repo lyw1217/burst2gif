@@ -167,8 +167,53 @@ export async function createOutputSink(): Promise<OutputSink> {
   return new MemoryOutputSink();
 }
 
+export async function checkStorageQuota(estimatedBytesNeeded: number = 200 * 1024 * 1024): Promise<{
+  ok: boolean;
+  availableBytes: number;
+  message?: string;
+}> {
+  if (typeof navigator === 'undefined' || !navigator.storage || !navigator.storage.estimate) {
+    return { ok: true, availableBytes: Infinity };
+  }
+
+  try {
+    const { quota, usage } = await navigator.storage.estimate();
+    if (quota !== undefined && usage !== undefined) {
+      const available = quota - usage;
+      if (available < estimatedBytesNeeded) {
+        return {
+          ok: false,
+          availableBytes: available,
+          message: `브라우저 임시 저장 공간이 부족합니다. (여유: ${(available / (1024 * 1024)).toFixed(0)}MB / 필요: ${(estimatedBytesNeeded / (1024 * 1024)).toFixed(0)}MB)`,
+        };
+      }
+      return { ok: true, availableBytes: available };
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return { ok: true, availableBytes: Infinity };
+}
+
+/**
+ * 특정 OPFS 임시 파일 즉시 삭제
+ */
+export async function deleteOPFSTempFile(filename: string): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.storage || !navigator.storage.getDirectory) {
+    return;
+  }
+  try {
+    const root = await navigator.storage.getDirectory();
+    await root.removeEntry(filename);
+  } catch (e) {
+    // ignore
+  }
+}
+
 /**
  * 이전 세션에서 비정상 종료 등으로 남았을 수 있는 OPFS 임시 파일들 정리
+ * 안전 보장: burst2gif-temp- 프리픽스를 가진 전용 임시 파일만 엄격히 제거
  */
 export async function cleanupOldOPFSTempFiles(): Promise<void> {
   if (typeof navigator === 'undefined' || !navigator.storage || !navigator.storage.getDirectory) {
@@ -179,7 +224,7 @@ export async function cleanupOldOPFSTempFiles(): Promise<void> {
     const root = await navigator.storage.getDirectory();
     // @ts-ignore
     for await (const [name, handle] of root.entries()) {
-      if (name.startsWith('burst2gif-temp-') || name.endsWith('.tmp')) {
+      if (name.startsWith('burst2gif-temp-')) {
         try {
           await root.removeEntry(name);
         } catch (e) {}

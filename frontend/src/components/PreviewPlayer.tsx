@@ -17,11 +17,17 @@ export const PreviewPlayer: React.FC<Props> = ({
   setCurrentFrame,
 }) => {
   const [isPlaying, setIsPlaying] = useState(true);
+  const [localFrame, setLocalFrame] = useState(currentFrame);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
+  // 상위 선택 프레임 변경 시 로컬 프레임 동기화
+  useEffect(() => {
+    setLocalFrame(currentFrame);
+  }, [currentFrame]);
+
   // 현재 활성 프레임 이미지 온디맨드 로드
-  const activeFile = files[currentFrame] || files[0];
+  const activeFile = files[localFrame] || files[0];
 
   useEffect(() => {
     if (!activeFile) {
@@ -41,7 +47,7 @@ export const PreviewPlayer: React.FC<Props> = ({
     };
   }, [activeFile]);
 
-  // Play/Pause 애니메이션 루프
+  // Play/Pause 애니메이션 루프 (컴포넌트 내부 state만 변경하여 App 전체 리렌더링 완전 방지)
   useEffect(() => {
     if (!isPlaying || files.length === 0) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -50,13 +56,13 @@ export const PreviewPlayer: React.FC<Props> = ({
 
     const intervalMs = Math.max(16, 1000 / fps);
     timerRef.current = window.setInterval(() => {
-      setCurrentFrame((prev) => (prev + 1) % files.length);
+      setLocalFrame((prev) => (prev + 1) % files.length);
     }, intervalMs);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isPlaying, fps, files.length, setCurrentFrame]);
+  }, [isPlaying, fps, files.length]);
 
   if (files.length === 0) {
     return (
@@ -78,7 +84,7 @@ export const PreviewPlayer: React.FC<Props> = ({
           </span>
         </h2>
         <span className="text-xs font-mono text-slate-400">
-          프레임 {currentFrame + 1} / {files.length}
+          프레임 {localFrame + 1} / {files.length}
         </span>
       </div>
 
@@ -102,10 +108,12 @@ export const PreviewPlayer: React.FC<Props> = ({
           type="range"
           min={0}
           max={Math.max(0, files.length - 1)}
-          value={currentFrame}
+          value={localFrame}
           onChange={(e) => {
             setIsPlaying(false);
-            setCurrentFrame(Number(e.target.value));
+            const val = Number(e.target.value);
+            setLocalFrame(val);
+            setCurrentFrame(val);
           }}
           className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
         />
@@ -122,6 +130,7 @@ export const PreviewPlayer: React.FC<Props> = ({
             </button>
             <button
               onClick={() => {
+                setLocalFrame(0);
                 setCurrentFrame(0);
               }}
               title="처음으로 되감기"

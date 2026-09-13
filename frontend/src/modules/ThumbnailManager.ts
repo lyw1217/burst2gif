@@ -5,6 +5,27 @@
 class ThumbnailManager {
   private cache = new Map<string, string>(); // fileId -> objectURL
   private pendingPromises = new Map<string, Promise<string>>();
+  private activeCount = 0;
+  private maxConcurrency = 2; // 메인 스레드 프리징 방지를 위해 동시 디코딩 2개로 제한
+  private queue: Array<() => void> = [];
+
+  private async acquireSlot(): Promise<void> {
+    if (this.activeCount < this.maxConcurrency) {
+      this.activeCount++;
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      this.queue.push(resolve);
+    });
+  }
+
+  private releaseSlot(): void {
+    this.activeCount--;
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (next) next();
+    }
+  }
 
   /**
    * 지정된 파일에 대한 160px 썸네일 ObjectURL 반환 (캐시 있으면 즉시 반환)
@@ -16,7 +37,15 @@ class ThumbnailManager {
     const pending = this.pendingPromises.get(id);
     if (pending) return pending;
 
-    const promise = this.generateThumbnail(id, file);
+    const promise = (async () => {
+      await this.acquireSlot();
+      try {
+        return await this.generateThumbnail(id, file);
+      } finally {
+        this.releaseSlot();
+      }
+    })();
+
     this.pendingPromises.set(id, promise);
 
     try {

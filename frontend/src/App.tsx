@@ -10,7 +10,8 @@ import { ResultModal } from './components/ResultModal';
 import { ManagedFile } from './modules/FileManager';
 import { jobController, JobProgress, JobResult } from './modules/JobController';
 import { calculateOutputDimensions } from './modules/RiskEvaluator';
-import { cleanupOldOPFSTempFiles } from './modules/OutputSink';
+import { cleanupOldOPFSTempFiles, checkStorageQuota } from './modules/OutputSink';
+import { AlertTriangle, AlertCircle, X } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [files, setFiles] = useState<ManagedFile[]>([]);
@@ -20,7 +21,10 @@ export const App: React.FC = () => {
   const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain');
   const [loop, setLoop] = useState<number>(0); // 0 = 무한 반복
   const [aspectDimensions, setAspectDimensions] = useState<{ width: number; height: number }>({ width: 3, height: 2 });
+  const [hasMixedOrientations, setHasMixedOrientations] = useState<boolean>(false);
 
+  const [notification, setNotification] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [jobProgress, setJobProgress] = useState<JobProgress | null>(null);
   const [jobResult, setJobResult] = useState<JobResult | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -30,13 +34,34 @@ export const App: React.FC = () => {
     cleanupOldOPFSTempFiles();
   }, []);
 
-  // 첫 번째 사진의 실제 종횡비 자동 감지
+  // 첫 번째 사진의 실제 종횡비 자동 감지 및 가로/세로 혼합 여부 판별
   useEffect(() => {
     if (files.length > 0) {
       let isMounted = true;
       createImageBitmap(files[0].file).then((bmp) => {
         if (isMounted) {
           setAspectDimensions({ width: bmp.width, height: bmp.height });
+          const firstIsLandscape = bmp.width >= bmp.height;
+
+          // 만약 사진이 여러 장이면 처음 5장의 방향을 비교하여 혼합 여부 체크
+          if (files.length > 1) {
+            Promise.all(
+              files.slice(1, Math.min(files.length, 6)).map((f) =>
+                createImageBitmap(f.file).then((b) => {
+                  const isLand = b.width >= b.height;
+                  b.close();
+                  return isLand;
+                }).catch(() => firstIsLandscape)
+              )
+            ).then((results) => {
+              if (isMounted) {
+                const mixed = results.some((isLand) => isLand !== firstIsLandscape);
+                setHasMixedOrientations(mixed);
+              }
+            });
+          } else {
+            setHasMixedOrientations(false);
+          }
         }
         bmp.close();
       }).catch(() => {});
@@ -50,7 +75,18 @@ export const App: React.FC = () => {
   const handleStartConvert = async () => {
     if (files.length === 0 || isProcessing) return;
 
-    // 실제 원본 종횡비에 맞는 정확한 출력 치수 계산
+    setErrorMessage(null);
+
+    // 1. 브라우저 임시 스토리지 Quota 사전 확인 (예상 250MB 기준)
+    const quotaCheck = await checkStorageQuota(250 * 1024 * 1024);
+    if (!quotaCheck.ok) {
+      setErrorMessage(
+        quotaCheck.message || '브라우저 임시 저장 공간이 부족합니다. 디스크 여유 공간을 확보해 주세요.'
+      );
+      return;
+    }
+
+    // 2. 실제 원본 종횡비에 맞는 정확한 출력 치수 계산
     const { width: targetWidth, height: targetHeight } = calculateOutputDimensions(
       aspectDimensions.width,
       aspectDimensions.height,
@@ -86,10 +122,10 @@ export const App: React.FC = () => {
         setJobProgress(null);
         setJobResult(result);
       },
-      (errorMessage) => {
+      (err) => {
         setIsProcessing(false);
         setJobProgress(null);
-        alert(`오류: ${errorMessage}`);
+        setErrorMessage(err);
       }
     );
   };
@@ -101,18 +137,66 @@ export const App: React.FC = () => {
     setJobProgress(null);
   };
 
+  // 결과 모달 닫기 (임시 파일 정리 연동)
+  const handleCloseResult = () => {
+    setJobResult(null);
+    cleanupOldOPFSTempFiles();
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
       <Header />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        {/* 제외된 파일 피드백 배너 */}
+        {notification && (
+          <div className="p-3.5 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl text-xs text-indigo-300 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-indigo-400" />
+              <span>{notification}</span>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="text-indigo-400 hover:text-white p-1 rounded-lg hover:bg-indigo-500/20 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* 오류 안내 모달/배너 */}
+        {errorMessage && (
+          <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-xs text-rose-300 flex items-start justify-between shadow-lg">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+              <div className="space-y-1">
+                <div className="font-bold text-sm text-rose-200">처리 중 문제가 발생했습니다</div>
+                <div className="text-slate-300">{errorMessage}</div>
+                <div className="text-[11px] text-slate-400 pt-1">
+                  💡 사진 크기를 960px 또는 1280px로 낮추거나, 손상된 사진이 있는지 확인 후 다시 시도해 보세요.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setErrorMessage(null)}
+              className="text-rose-400 hover:text-white p-1 rounded-lg hover:bg-rose-500/20 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* 상단 파일/폴더 선택 섹션 */}
         <InputSection
-          onFilesSelected={(newFiles) => {
+          onFilesSelected={(newFiles, notice) => {
             setFiles((prev) => [...prev, ...newFiles]);
             setSelectedFrame(0);
+            if (notice) {
+              setNotification(notice);
+            }
           }}
           isLoading={isProcessing}
+          existingFiles={files}
         />
 
         {files.length > 0 && (
@@ -149,6 +233,7 @@ export const App: React.FC = () => {
                 onSubmit={handleStartConvert}
                 isProcessing={isProcessing}
                 aspectDimensions={aspectDimensions}
+                hasMixedOrientations={hasMixedOrientations}
               />
             </div>
           </div>
@@ -164,7 +249,7 @@ export const App: React.FC = () => {
       {/* 최종 결과 모달 */}
       <ResultModal
         result={jobResult}
-        onClose={() => setJobResult(null)}
+        onClose={handleCloseResult}
       />
     </div>
   );

@@ -15,6 +15,7 @@ interface Props {
   onSubmit: () => void;
   isProcessing: boolean;
   aspectDimensions?: { width: number; height: number };
+  hasMixedOrientations?: boolean;
 }
 
 export const ControlPanel: React.FC<Props> = ({
@@ -30,6 +31,7 @@ export const ControlPanel: React.FC<Props> = ({
   onSubmit,
   isProcessing,
   aspectDimensions = { width: 3, height: 2 },
+  hasMixedOrientations = false,
 }) => {
   // 실제 감지된 종횡비에 맞춰 정확한 WorkPixels 및 출력 치수 계산
   const { width: outW, height: outH } = calculateOutputDimensions(
@@ -43,7 +45,7 @@ export const ControlPanel: React.FC<Props> = ({
   const presets = [
     { label: '작은 용량', width: 960, desc: '메신저 / 빠른 공유' },
     { label: '보통 화질', width: 1280, desc: '추천 기본값', isDefault: true },
-    { label: '고화질', width: 1920, desc: 'PC 감상용' },
+    { label: '선명하게', width: 1920, desc: 'PC 감상용 (256색)' },
   ];
 
   return (
@@ -57,6 +59,15 @@ export const ControlPanel: React.FC<Props> = ({
           {outW} × {outH} ({isLandscape ? '가로형' : '세로형'})
         </span>
       </div>
+
+      {hasMixedOrientations && (
+        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-300 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+          <span>
+            가로와 세로 사진이 함께 섞여 있습니다. '화면에 맞추기' 모드 사용 시 일부 프레임에 검은 여백이 들어갈 수 있습니다.
+          </span>
+        </div>
+      )}
 
       {/* 1. 크기 선택 (Resolution Presets) */}
       <div className="space-y-3">

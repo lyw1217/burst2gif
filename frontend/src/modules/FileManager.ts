@@ -65,20 +65,45 @@ export interface ValidationResult {
   rejectedReasons: string[];
 }
 
+export const MAX_MEGAPIXELS = 150; // 150MP 초과 방어
+
 /**
- * 사용자 입력 파일 목록 검증 및 자연수 정렬
+ * 사용자 입력 파일 목록 누적 검증 및 자연수 정렬 (중복 방지 & 150MP 초과 방어 포함)
  */
-export function filterAndSortFiles(rawFiles: File[]): ValidationResult {
+export async function filterAndSortFiles(
+  rawFiles: File[],
+  existingFiles: ManagedFile[] = []
+): Promise<ValidationResult> {
   const validFiles: ManagedFile[] = [];
   const rejectedReasons: string[] = [];
   let rejectedCount = 0;
-  let totalBytes = 0;
+
+  // 1. 기존 파일 중복 체크용 Set 구성 (파일명 + 크기 + 수정시각)
+  const existingSignatures = new Set(
+    existingFiles.map((f) => `${f.file.name}_${f.file.size}_${f.file.lastModified}`)
+  );
+  const currentSignatures = new Set<string>();
+
+  // 2. 기존 파일 총 누적 용량 및 개수
+  let currentTotalBytes = existingFiles.reduce((acc, cur) => acc + cur.size, 0);
+  const existingCount = existingFiles.length;
 
   for (const file of rawFiles) {
+    const signature = `${file.name}_${file.size}_${file.lastModified}`;
+
+    // A. 중복 파일 검사
+    if (existingSignatures.has(signature) || currentSignatures.has(signature)) {
+      rejectedCount++;
+      if (!rejectedReasons.includes('이미 추가된 중복 사진 제외')) {
+        rejectedReasons.push('이미 추가된 중복 사진 제외');
+      }
+      continue;
+    }
+
     const dotIndex = file.name.lastIndexOf('.');
     const ext = dotIndex !== -1 ? file.name.slice(dotIndex).toLowerCase() : '';
 
-    // 1. 지원 포맷 검사
+    // B. 지원 포맷 검사
     if (!SUPPORTED_EXTENSIONS.includes(ext)) {
       rejectedCount++;
       if (!rejectedReasons.includes('지원되지 않는 포맷 (RAW, HEIC 등 제외)')) {
@@ -87,7 +112,7 @@ export function filterAndSortFiles(rawFiles: File[]): ValidationResult {
       continue;
     }
 
-    // 2. 단일 파일 크기 한도 (250MB)
+    // C. 단일 파일 크기 한도 (250MB)
     if (file.size > MAX_SINGLE_FILE_SIZE) {
       rejectedCount++;
       if (!rejectedReasons.includes('단일 파일 250MB 초과')) {
@@ -96,25 +121,49 @@ export function filterAndSortFiles(rawFiles: File[]): ValidationResult {
       continue;
     }
 
-    // 3. 총 파일 크기 한도 (10GB)
-    if (totalBytes + file.size > MAX_TOTAL_FILE_SIZE) {
+    // D. 누적 총 파일 크기 한도 (10GB)
+    if (currentTotalBytes + file.size > MAX_TOTAL_FILE_SIZE) {
       rejectedCount++;
-      if (!rejectedReasons.includes('총 용량 10GB 초과')) {
-        rejectedReasons.push('총 용량 10GB 초과');
+      if (!rejectedReasons.includes('누적 총 용량 10GB 초과')) {
+        rejectedReasons.push('누적 총 용량 10GB 초과');
       }
       continue;
     }
 
-    // 4. 최대 1000장 제한
-    if (validFiles.length >= MAX_FILES) {
+    // E. 누적 최대 1,000장 제한
+    if (existingCount + validFiles.length >= MAX_FILES) {
       rejectedCount++;
-      if (!rejectedReasons.includes('최대 1,000장 초과')) {
-        rejectedReasons.push('최대 1,000장 초과');
+      if (!rejectedReasons.includes('누적 최대 1,000장 초과')) {
+        rejectedReasons.push('누적 최대 1,000장 초과');
       }
       continue;
     }
 
-    totalBytes += file.size;
+    // F. 이미지 헤더 및 초고화소(150MP) 사전 검증
+    try {
+      // 아주 작은 해상도(32px)로 프로브하여 파일 손상 여부 및 원본 치수 검사
+      const probe = await createImageBitmap(file);
+      const totalPixels = probe.width * probe.height;
+      probe.close();
+
+      if (totalPixels > MAX_MEGAPIXELS * 1_000_000) {
+        rejectedCount++;
+        if (!rejectedReasons.includes('150MP 초과 초고화소 사진 제외')) {
+          rejectedReasons.push('150MP 초과 초고화소 사진 제외');
+        }
+        continue;
+      }
+    } catch (probeErr) {
+      rejectedCount++;
+      if (!rejectedReasons.includes('손상되었거나 읽을 수 없는 이미지 파일 제외')) {
+        rejectedReasons.push('손상되었거나 읽을 수 없는 이미지 파일 제외');
+      }
+      continue;
+    }
+
+    currentSignatures.add(signature);
+    currentTotalBytes += file.size;
+
     validFiles.push({
       id: `${file.name}_${file.size}_${file.lastModified}_${Math.random().toString(36).substring(2, 6)}`,
       file,

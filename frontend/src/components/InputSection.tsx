@@ -3,34 +3,55 @@ import { UploadCloud, FolderOpen, Images, AlertCircle } from 'lucide-react';
 import { ManagedFile, filterAndSortFiles } from '../modules/FileManager';
 
 interface Props {
-  onFilesSelected: (files: ManagedFile[]) => void;
+  onFilesSelected: (files: ManagedFile[], notice?: string) => void;
   isLoading: boolean;
+  existingFiles: ManagedFile[];
 }
 
-export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading }) => {
+export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading, existingFiles }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
-  const handleRawFiles = (rawFileList: FileList | null) => {
+  const handleRawFiles = async (rawFileList: FileList | null) => {
     if (!rawFileList || rawFileList.length === 0) return;
 
     setError(null);
-    const filesArray = Array.from(rawFileList);
-    const { validFiles, rejectedCount, rejectedReasons } = filterAndSortFiles(filesArray);
+    setIsVerifying(true);
 
-    if (validFiles.length === 0) {
-      setError('선택된 파일 중 지원되는 이미지(JPG, PNG, WEBP)가 없습니다.');
-      return;
+    try {
+      const filesArray = Array.from(rawFileList);
+      const { validFiles, rejectedCount, rejectedReasons } = await filterAndSortFiles(
+        filesArray,
+        existingFiles
+      );
+
+      if (validFiles.length === 0) {
+        if (rejectedCount > 0) {
+          setError(`사진을 추가할 수 없습니다: ${rejectedReasons.join(', ')}`);
+        } else {
+          setError('선택된 파일 중 지원되는 이미지(JPG, PNG, WEBP)가 없습니다.');
+        }
+        return;
+      }
+
+      let notice: string | undefined;
+      if (rejectedCount > 0) {
+        notice = `${rejectedCount}장의 사진을 제외했습니다 (${rejectedReasons.join(', ')}). 나머지 ${validFiles.length}장은 정상 추가되었습니다.`;
+      }
+
+      onFilesSelected(validFiles, notice);
+    } catch (err: any) {
+      setError(err.message || '파일 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsVerifying(false);
+      // 인풋 초기화 (동일 폴더/파일 재선택 가능하도록)
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (folderInputRef.current) folderInputRef.current.value = '';
     }
-
-    if (rejectedCount > 0) {
-      console.warn(`일부 파일 제외됨: ${rejectedReasons.join(', ')} (${rejectedCount}개)`);
-    }
-
-    onFilesSelected(validFiles);
   };
 
   const onDragOver = (e: React.DragEvent) => {
@@ -64,7 +85,7 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading }) =>
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => !isVerifying && !isLoading && fileInputRef.current?.click()}
         className={`border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all ${
           isDragging
             ? 'border-indigo-500 bg-indigo-500/10 scale-[0.99]'
@@ -77,7 +98,7 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading }) =>
           </div>
           <div>
             <h3 className="text-base font-semibold text-white">
-              연사 사진들을 여기에 끌어다 놓으세요
+              {isVerifying ? '사진 파일 유효성 검사 중...' : '연사 사진들을 여기에 끌어다 놓으세요'}
             </h3>
             <p className="text-xs text-slate-400 mt-1">
               또는 클릭하여 파일이나 폴더를 직접 선택하세요 (JPEG, PNG, WebP)
@@ -87,7 +108,7 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading }) =>
           <div className="flex items-center gap-3 pt-2" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
-              disabled={isLoading}
+              disabled={isLoading || isVerifying}
               onClick={() => fileInputRef.current?.click()}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-medium rounded-xl flex items-center gap-1.5 shadow-md shadow-indigo-600/25 transition"
             >
@@ -96,7 +117,7 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading }) =>
             </button>
             <button
               type="button"
-              disabled={isLoading}
+              disabled={isLoading || isVerifying}
               onClick={() => folderInputRef.current?.click()}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-medium rounded-xl border border-slate-700 flex items-center gap-1.5 transition"
             >
@@ -128,8 +149,8 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading }) =>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 px-2">
-        <span>⚡ 20~50MB 고용량 사진도 브라우저 튕김 없이 안전하게 처리</span>
-        <span>최대 1,000장 / 총 10GB까지 지원</span>
+        <span>⚡ 브라우저 내 1장씩 스트리밍 처리 (서버 업로드 없음)</span>
+        <span>최대 1,000장 지원 (권장: 100~300장)</span>
       </div>
     </div>
   );

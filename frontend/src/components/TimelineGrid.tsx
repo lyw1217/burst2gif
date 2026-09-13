@@ -223,24 +223,30 @@ export const TimelineGrid: React.FC<Props> = ({
                   e.stopPropagation();
                   handleDelete(index);
                 }}
-                className="absolute top-2 right-2 p-1 bg-black/70 hover:bg-rose-600 text-slate-400 hover:text-white rounded-md opacity-0 group-hover:opacity-100 transition shadow"
+                className={`absolute top-2 right-2 p-1.5 bg-black/80 hover:bg-rose-600 text-slate-300 hover:text-white rounded-md transition shadow ${
+                  isSelected ? 'opacity-100 scale-105' : 'opacity-0 group-hover:opacity-100'
+                }`}
                 title="이 프레임 삭제"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
 
               {/* Move Buttons */}
-              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between opacity-0 group-hover:opacity-100 transition">
+              <div
+                className={`absolute bottom-2 left-2 right-2 flex items-center justify-between transition ${
+                  isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+              >
                 <button
                   disabled={index === 0}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleMove(index, index - 1);
                   }}
-                  className="p-1 bg-black/70 hover:bg-slate-700 text-white rounded disabled:opacity-30"
+                  className="p-1 bg-black/80 hover:bg-indigo-600 text-white rounded disabled:opacity-30"
                   title="앞으로 이동"
                 >
-                  <ChevronLeft className="w-3 h-3" />
+                  <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
                 <button
                   disabled={index === files.length - 1}
@@ -248,10 +254,10 @@ export const TimelineGrid: React.FC<Props> = ({
                     e.stopPropagation();
                     handleMove(index, index + 1);
                   }}
-                  className="p-1 bg-black/70 hover:bg-slate-700 text-white rounded disabled:opacity-30"
+                  className="p-1 bg-black/80 hover:bg-indigo-600 text-white rounded disabled:opacity-30"
                   title="뒤로 이동"
                 >
-                  <ChevronRight className="w-3 h-3" />
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
 

@@ -85,11 +85,11 @@ export function calculateOutputDimensions(
   let height: number;
 
   if (isLandscape) {
-    width = Math.min(origWidth, targetLongEdge);
-    height = Math.round((width * origHeight) / origWidth);
+    width = targetLongEdge;
+    height = Math.round((targetLongEdge * origHeight) / origWidth);
   } else {
-    height = Math.min(origHeight, targetLongEdge);
-    width = Math.round((height * origWidth) / origHeight);
+    height = targetLongEdge;
+    width = Math.round((targetLongEdge * origWidth) / origHeight);
   }
 
   // 짝수 픽셀 보정 (일부 디스플레이 및 인코더 호환성)

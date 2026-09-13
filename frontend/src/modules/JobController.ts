@@ -12,6 +12,7 @@ export interface JobProgress {
   currentFrame: number;
   totalFrames: number;
   currentBytes: number;
+  estimatedTotalBytes?: number;
   fileName: string;
   percent: number;
 }
@@ -56,6 +57,7 @@ export class JobController {
             currentFrame: msg.currentFrame,
             totalFrames: msg.totalFrames,
             currentBytes: msg.currentBytes,
+            estimatedTotalBytes: msg.estimatedTotalBytes,
             fileName: msg.fileName,
             percent,
           });
@@ -105,7 +107,12 @@ export class JobController {
       } catch (e) {
         // ignore
       }
-      this.cleanup();
+      // 워커가 OPFS 임시파일을 abort()로 정리할 수 있도록 약간의 시간(300ms) 후 terminate
+      setTimeout(() => {
+        if (this.isRunning) {
+          this.cleanup();
+        }
+      }, 300);
     }
   }
 
