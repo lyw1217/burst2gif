@@ -191,8 +191,8 @@ export const TimelineGrid: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Grid Timeline */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 max-h-80 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+      {/* Grid Timeline (12열 전체 폭 대응) */}
+      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2 max-h-64 sm:max-h-72 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700">
         {files.map((item, index) => {
           const isSelected = index === selectedFrameIndex;
           return (
@@ -262,14 +262,56 @@ export const TimelineGrid: React.FC<Props> = ({
               </div>
 
               {/* File Info */}
-              <div className="mt-1 px-1 flex items-center justify-between text-[10px] text-slate-400">
-                <span className="truncate max-w-[70px]">{item.name}</span>
-                <span className="shrink-0">{item.sizeFormatted}</span>
+              <div className="mt-1 px-0.5 flex items-center justify-between text-[9px] text-slate-400">
+                <span className="truncate max-w-[50px] sm:max-w-[60px]">{item.name}</span>
+                <span className="shrink-0 font-mono">{item.sizeFormatted}</span>
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Selected Frame Touch Action Toolbar (모바일/터치 친화적 큼직한 툴바) */}
+      {files[selectedFrameIndex] && (
+        <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+              #{selectedFrameIndex + 1}
+            </span>
+            <span className="text-slate-400 truncate max-w-[130px] sm:max-w-[240px]">
+              {files[selectedFrameIndex].name}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              disabled={selectedFrameIndex === 0}
+              onClick={() => handleMove(selectedFrameIndex, selectedFrameIndex - 1)}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-indigo-600 disabled:opacity-30 text-white rounded-lg transition flex items-center gap-1 text-xs"
+              title="이 프레임을 앞으로 이동"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>앞으로</span>
+            </button>
+            <button
+              disabled={selectedFrameIndex === files.length - 1}
+              onClick={() => handleMove(selectedFrameIndex, selectedFrameIndex + 1)}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-indigo-600 disabled:opacity-30 text-white rounded-lg transition flex items-center gap-1 text-xs"
+              title="이 프레임을 뒤로 이동"
+            >
+              <span>뒤로</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleDelete(selectedFrameIndex)}
+              className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-600 text-rose-300 hover:text-white rounded-lg border border-rose-500/30 transition flex items-center gap-1 text-xs"
+              title="이 프레임 삭제"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>삭제</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

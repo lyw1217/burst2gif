@@ -6,9 +6,15 @@ interface Props {
   onFilesSelected: (files: ManagedFile[], notice?: string) => void;
   isLoading: boolean;
   existingFiles: ManagedFile[];
+  onClearAll?: () => void;
 }
 
-export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading, existingFiles }) => {
+export const InputSection: React.FC<Props> = ({
+  onFilesSelected,
+  isLoading,
+  existingFiles,
+  onClearAll,
+}) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +39,7 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading, exis
         if (rejectedCount > 0) {
           setError(`사진을 추가할 수 없습니다: ${rejectedReasons.join(', ')}`);
         } else {
-          setError('선택된 파일 중 지원되는 이미지(JPG, PNG, WEBP)가 없습니다.');
+          setError('선택된 파일 중 지원되는 이미지(JPG, PNG, WebP)가 없습니다.');
         }
         return;
       }
@@ -48,7 +54,6 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading, exis
       setError(err.message || '파일 처리 중 오류가 발생했습니다.');
     } finally {
       setIsVerifying(false);
-      // 인풋 초기화 (동일 폴더/파일 재선택 가능하도록)
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (folderInputRef.current) folderInputRef.current.value = '';
     }
@@ -71,8 +76,121 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading, exis
     }
   };
 
+  const totalBytes = existingFiles.reduce((sum, f) => sum + f.size, 0);
+  const formattedTotalSize =
+    totalBytes < 1024 * 1024
+      ? `${(totalBytes / 1024).toFixed(1)} KB`
+      : totalBytes < 1024 * 1024 * 1024
+      ? `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`
+      : `${(totalBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+
+  // Hidden file inputs
+  const hiddenInputs = (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".jpg,.jpeg,.png,.webp,.bmp"
+        className="hidden"
+        onChange={(e) => handleRawFiles(e.target.files)}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        // @ts-ignore
+        webkitdirectory=""
+        directory=""
+        multiple
+        className="hidden"
+        onChange={(e) => handleRawFiles(e.target.files)}
+      />
+    </>
+  );
+
+  // 1. 이미 사진이 추가되어 있을 때: 초슬림 Compact Action Bar
+  if (existingFiles.length > 0) {
+    return (
+      <div
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className={`bg-slate-900/80 border rounded-2xl p-3.5 sm:p-4 shadow-xl flex flex-wrap items-center justify-between gap-3 transition-all ${
+          isDragging
+            ? 'border-indigo-500 bg-indigo-500/15 ring-2 ring-indigo-500/30'
+            : 'border-slate-800'
+        }`}
+      >
+        {hiddenInputs}
+        {error && (
+          <div className="w-full p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-400 shrink-0">
+            <Images className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-white flex items-center gap-2">
+              <span>{existingFiles.length}장의 사진 등록됨</span>
+              <span className="text-xs font-mono text-slate-400 bg-slate-800/90 px-2 py-0.5 rounded-md border border-slate-700/60">
+                {formattedTotalSize}
+              </span>
+            </div>
+            <div className="text-xs text-slate-400">
+              {isVerifying ? (
+                <span className="text-indigo-400 animate-pulse">추가 사진 검사 중...</span>
+              ) : isDragging ? (
+                <span className="text-indigo-300 font-medium">여기에 놓으면 즉시 추가됩니다</span>
+              ) : (
+                '이곳에 사진을 더 끌어다 놓아 추가할 수 있습니다'
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={isLoading || isVerifying}
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-medium rounded-xl flex items-center gap-1.5 shadow transition"
+          >
+            <Images className="w-3.5 h-3.5" />
+            + 사진 추가
+          </button>
+          <button
+            type="button"
+            disabled={isLoading || isVerifying}
+            onClick={() => folderInputRef.current?.click()}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 hover:text-white text-xs font-medium rounded-xl border border-slate-700 flex items-center gap-1.5 transition"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
+            + 폴더 추가
+          </button>
+          {onClearAll && (
+            <button
+              type="button"
+              disabled={isLoading || isVerifying}
+              onClick={onClearAll}
+              className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-600 text-rose-300 hover:text-white text-xs font-medium rounded-xl border border-rose-500/20 transition"
+            >
+              비우기
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. 사진이 없을 때: 큼직하고 친절한 기본 업로드 영역
   return (
-    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-4">
+      {hiddenInputs}
+
       {error && (
         <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -98,7 +216,7 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading, exis
           </div>
           <div>
             <h3 className="text-base font-semibold text-white">
-              {isVerifying ? '사진 파일 유효성 검사 중...' : '연사 사진들을 여기에 끌어다 놓으세요'}
+              {isVerifying ? '사진 파일 검사 중...' : '연사 사진들을 여기에 끌어다 놓으세요'}
             </h3>
             <p className="text-xs text-slate-400 mt-1">
               또는 클릭하여 파일이나 폴더를 직접 선택하세요 (JPEG, PNG, WebP)
@@ -126,30 +244,10 @@ export const InputSection: React.FC<Props> = ({ onFilesSelected, isLoading, exis
             </button>
           </div>
         </div>
-
-        {/* Hidden Inputs */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".jpg,.jpeg,.png,.webp,.bmp"
-          className="hidden"
-          onChange={(e) => handleRawFiles(e.target.files)}
-        />
-        <input
-          ref={folderInputRef}
-          type="file"
-          // @ts-ignore
-          webkitdirectory=""
-          directory=""
-          multiple
-          className="hidden"
-          onChange={(e) => handleRawFiles(e.target.files)}
-        />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 px-2">
-        <span>⚡ 브라우저 내 1장씩 스트리밍 처리 (서버 업로드 없음)</span>
+        <span>🔒 사진은 업로드되지 않고 내 기기에서 바로 처리돼요</span>
         <span>최대 1,000장 지원 (권장: 100~300장)</span>
       </div>
     </div>

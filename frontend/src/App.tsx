@@ -34,42 +34,37 @@ export const App: React.FC = () => {
     cleanupOldOPFSTempFiles();
   }, []);
 
-  // 첫 번째 사진의 실제 종횡비 자동 감지 및 가로/세로 혼합 여부 판별
+  // 첫 번째 사진의 실제 종횡비 자동 감지 및 가로/세로 혼합 여부 전수 판별
   useEffect(() => {
     if (files.length > 0) {
-      let isMounted = true;
-      createImageBitmap(files[0].file).then((bmp) => {
-        if (isMounted) {
-          setAspectDimensions({ width: bmp.width, height: bmp.height });
-          const firstIsLandscape = bmp.width >= bmp.height;
-
-          // 만약 사진이 여러 장이면 처음 5장의 방향을 비교하여 혼합 여부 체크
-          if (files.length > 1) {
-            Promise.all(
-              files.slice(1, Math.min(files.length, 6)).map((f) =>
-                createImageBitmap(f.file).then((b) => {
-                  const isLand = b.width >= b.height;
-                  b.close();
-                  return isLand;
-                }).catch(() => firstIsLandscape)
-              )
-            ).then((results) => {
-              if (isMounted) {
-                const mixed = results.some((isLand) => isLand !== firstIsLandscape);
-                setHasMixedOrientations(mixed);
-              }
-            });
-          } else {
-            setHasMixedOrientations(false);
+      const first = files[0];
+      if (first.width && first.height) {
+        setAspectDimensions({ width: first.width, height: first.height });
+        const mixed = files.some((f) => f.isLandscape !== first.isLandscape);
+        setHasMixedOrientations(mixed);
+      } else {
+        let isMounted = true;
+        createImageBitmap(first.file).then((bmp) => {
+          if (isMounted) {
+            setAspectDimensions({ width: bmp.width, height: bmp.height });
           }
-        }
-        bmp.close();
-      }).catch(() => {});
-      return () => {
-        isMounted = false;
-      };
+          bmp.close();
+        }).catch(() => {});
+        return () => {
+          isMounted = false;
+        };
+      }
+    } else {
+      setHasMixedOrientations(false);
     }
   }, [files]);
+
+  // 실시간 출력 치수 계산 (WYSIWYG 미리보기 및 인코딩에 공통 사용)
+  const { width: targetWidth, height: targetHeight } = calculateOutputDimensions(
+    aspectDimensions.width,
+    aspectDimensions.height,
+    targetLongEdge
+  );
 
   // GIF 만들기 시작
   const handleStartConvert = async () => {
@@ -77,21 +72,15 @@ export const App: React.FC = () => {
 
     setErrorMessage(null);
 
-    // 1. 브라우저 임시 스토리지 Quota 사전 확인 (예상 250MB 기준)
-    const quotaCheck = await checkStorageQuota(250 * 1024 * 1024);
+    // 1. 브라우저 임시 스토리지 Quota 사전 확인 (작업 크기에 따른 동적 계산)
+    const estimatedNeededBytes = Math.min(500 * 1024 * 1024, Math.max(50 * 1024 * 1024, files.length * 2 * 1024 * 1024));
+    const quotaCheck = await checkStorageQuota(estimatedNeededBytes);
     if (!quotaCheck.ok) {
       setErrorMessage(
         quotaCheck.message || '브라우저 임시 저장 공간이 부족합니다. 디스크 여유 공간을 확보해 주세요.'
       );
       return;
     }
-
-    // 2. 실제 원본 종횡비에 맞는 정확한 출력 치수 계산
-    const { width: targetWidth, height: targetHeight } = calculateOutputDimensions(
-      aspectDimensions.width,
-      aspectDimensions.height,
-      targetLongEdge
-    );
 
     setIsProcessing(true);
     setJobResult(null);
@@ -186,7 +175,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* 상단 파일/폴더 선택 섹션 */}
+        {/* 1. 상단 파일/폴더 선택 섹션 (사진 등록 시 슬림 액션바로 전환) */}
         <InputSection
           onFilesSelected={(newFiles, notice) => {
             setFiles((prev) => [...prev, ...newFiles]);
@@ -197,44 +186,50 @@ export const App: React.FC = () => {
           }}
           isLoading={isProcessing}
           existingFiles={files}
+          onClearAll={() => setFiles([])}
         />
 
         {files.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* 좌측 (7열): 타임라인 그리드 (온디맨드 썸네일, 순서 편집, 삭제) */}
-            <div className="lg:col-span-7 space-y-6">
-              <TimelineGrid
-                files={files}
-                onFilesChange={setFiles}
-                selectedFrameIndex={selectedFrame}
-                onSelectFrame={setSelectedFrame}
-              />
-            </div>
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* 2. 전체 폭 (12열): 타임라인 그리드 시퀀스 */}
+            <TimelineGrid
+              files={files}
+              onFilesChange={setFiles}
+              selectedFrameIndex={selectedFrame}
+              onSelectFrame={setSelectedFrame}
+            />
 
-            {/* 우측 (5열): 실시간 미리보기 및 제어 패널 */}
-            <div className="lg:col-span-5 space-y-6">
-              <PreviewPlayer
-                files={files}
-                fps={fps}
-                currentFrame={selectedFrame}
-                setCurrentFrame={setSelectedFrame}
-              />
+            {/* 3. 하단 2열 레이아웃: 대형 1:1 미리보기(7열) + 옵션 패널(5열) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-7">
+                <PreviewPlayer
+                  files={files}
+                  fps={fps}
+                  currentFrame={selectedFrame}
+                  setCurrentFrame={setSelectedFrame}
+                  targetWidth={targetWidth}
+                  targetHeight={targetHeight}
+                  fitMode={fitMode}
+                />
+              </div>
 
-              <ControlPanel
-                fileCount={files.length}
-                fps={fps}
-                onFpsChange={setFps}
-                targetLongEdge={targetLongEdge}
-                onTargetLongEdgeChange={setTargetLongEdge}
-                fitMode={fitMode}
-                onFitModeChange={setFitMode}
-                loop={loop}
-                onLoopChange={setLoop}
-                onSubmit={handleStartConvert}
-                isProcessing={isProcessing}
-                aspectDimensions={aspectDimensions}
-                hasMixedOrientations={hasMixedOrientations}
-              />
+              <div className="lg:col-span-5">
+                <ControlPanel
+                  fileCount={files.length}
+                  fps={fps}
+                  onFpsChange={setFps}
+                  targetLongEdge={targetLongEdge}
+                  onTargetLongEdgeChange={setTargetLongEdge}
+                  fitMode={fitMode}
+                  onFitModeChange={setFitMode}
+                  loop={loop}
+                  onLoopChange={setLoop}
+                  onSubmit={handleStartConvert}
+                  isProcessing={isProcessing}
+                  aspectDimensions={aspectDimensions}
+                  hasMixedOrientations={hasMixedOrientations}
+                />
+              </div>
             </div>
           </div>
         )}

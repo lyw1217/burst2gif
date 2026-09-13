@@ -1,3 +1,5 @@
+import { parseImageDimensions } from './ImageHeaderParser';
+
 export interface ManagedFile {
   id: string;
   file: File;
@@ -5,6 +7,9 @@ export interface ManagedFile {
   size: number;
   sizeFormatted: string;
   type: string;
+  width?: number;
+  height?: number;
+  isLandscape?: boolean;
 }
 
 export const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.bmp'];
@@ -139,13 +144,15 @@ export async function filterAndSortFiles(
       continue;
     }
 
-    // F. 이미지 헤더 및 초고화소(150MP) 사전 검증
+    // F. 초경량 바이너리 헤더 파싱 및 초고화소(150MP) 사전 검증
+    let parsedWidth = 0;
+    let parsedHeight = 0;
     try {
-      // 아주 작은 해상도(32px)로 프로브하여 파일 손상 여부 및 원본 치수 검사
-      const probe = await createImageBitmap(file);
-      const totalPixels = probe.width * probe.height;
-      probe.close();
+      const dims = await parseImageDimensions(file);
+      parsedWidth = dims.width;
+      parsedHeight = dims.height;
 
+      const totalPixels = parsedWidth * parsedHeight;
       if (totalPixels > MAX_MEGAPIXELS * 1_000_000) {
         rejectedCount++;
         if (!rejectedReasons.includes('150MP 초과 초고화소 사진 제외')) {
@@ -171,6 +178,9 @@ export async function filterAndSortFiles(
       size: file.size,
       sizeFormatted: formatBytes(file.size),
       type: file.type,
+      width: parsedWidth,
+      height: parsedHeight,
+      isLandscape: parsedWidth >= parsedHeight,
     });
   }
 

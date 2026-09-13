@@ -45,7 +45,7 @@ export const ControlPanel: React.FC<Props> = ({
   const presets = [
     { label: '작은 용량', width: 960, desc: '메신저 / 빠른 공유' },
     { label: '보통 화질', width: 1280, desc: '추천 기본값', isDefault: true },
-    { label: '선명하게', width: 1920, desc: 'PC 감상용 (256색)' },
+    { label: '선명하게', width: 1920, desc: '고해상도 · 큰 화면용' },
   ];
 
   return (

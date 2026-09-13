@@ -8,6 +8,9 @@ interface Props {
   fps: number;
   currentFrame: number;
   setCurrentFrame: React.Dispatch<React.SetStateAction<number>>;
+  targetWidth?: number;
+  targetHeight?: number;
+  fitMode?: 'contain' | 'cover';
 }
 
 export const PreviewPlayer: React.FC<Props> = ({
@@ -15,6 +18,9 @@ export const PreviewPlayer: React.FC<Props> = ({
   fps,
   currentFrame,
   setCurrentFrame,
+  targetWidth = 1280,
+  targetHeight = 852,
+  fitMode = 'contain',
 }) => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [localFrame, setLocalFrame] = useState(currentFrame);
@@ -75,12 +81,15 @@ export const PreviewPlayer: React.FC<Props> = ({
   }
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
           <span>실시간 미리보기</span>
           <span className="text-xs font-normal text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
-            {fps} FPS 실시간 반영
+            {fps} FPS 실시간 재생
+          </span>
+          <span className="text-xs font-normal text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60 hidden sm:inline-block">
+            {fitMode === 'cover' ? '화면 채우기 (크롭)' : '화면에 맞추기'}
           </span>
         </h2>
         <span className="text-xs font-mono text-slate-400">
@@ -88,17 +97,26 @@ export const PreviewPlayer: React.FC<Props> = ({
         </span>
       </div>
 
-      {/* Screen Frame */}
-      <div className="relative aspect-[4/3] sm:aspect-video w-full bg-black rounded-xl overflow-hidden flex items-center justify-center border border-slate-800 shadow-inner">
-        {previewUrl ? (
-          <img
-            src={previewUrl}
-            alt={activeFile.name}
-            className="max-h-full max-w-full object-contain select-none"
-          />
-        ) : (
-          <div className="text-xs text-slate-600 animate-pulse">프레임 로딩 중...</div>
-        )}
+      {/* 1:1 WYSIWYG Screen Frame (실제 출력 종횡비 및 fitMode 크롭 상태 100% 반영) */}
+      <div className="w-full flex items-center justify-center bg-slate-950/60 rounded-xl p-2 border border-slate-800/80">
+        <div
+          className="relative w-full max-h-[480px] bg-black rounded-lg overflow-hidden flex items-center justify-center border border-slate-800 shadow-inner"
+          style={{ aspectRatio: `${targetWidth} / ${targetHeight}` }}
+        >
+          {previewUrl ? (
+            <img
+              src={previewUrl}
+              alt={activeFile.name}
+              className={`select-none transition-all ${
+                fitMode === 'cover'
+                  ? 'w-full h-full object-cover'
+                  : 'max-h-full max-w-full object-contain'
+              }`}
+            />
+          ) : (
+            <div className="text-xs text-slate-600 animate-pulse">프레임 로딩 중...</div>
+          )}
+        </div>
       </div>
 
       {/* Player Controls */}
