@@ -43,19 +43,48 @@ async def add_no_cache_header(request, call_next):
         response.headers["Expires"] = "0"
     return response
 
-@app.on_event("startup")
-async def cleanup_old_temp_files():
-    """서버 시작 시 24시간 이상 지난 임시 업로드 폴더 자동 정리"""
+def cleanup_temp_files():
+    """드래그 앤 드롭 임시 업로드 파일 및 썸네일 캐시 초기화"""
     import shutil
-    import time
     try:
-        now = time.time()
         if TEMP_DIR.exists():
             for item in TEMP_DIR.iterdir():
-                if item.is_dir() and (now - item.stat().st_mtime > 86400):
-                    shutil.rmtree(item, ignore_errors=True)
+                try:
+                    if item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+                    else:
+                        item.unlink(missing_ok=True)
+                except Exception as e:
+                    print(f"[Cleanup Note] 임시 파일 삭제 실패 ({item.name}): {e}")
+            print("[Burst2Gif] 임시 업로드 폴더(data/temp)가 초기화되었습니다.")
     except Exception as e:
-        print(f"[Cleanup Note] {e}")
+        print(f"[Cleanup Error] {e}")
+
+    try:
+        from config import THUMB_CACHE_DIR
+        if THUMB_CACHE_DIR.exists():
+            for item in THUMB_CACHE_DIR.iterdir():
+                try:
+                    if item.is_file():
+                        item.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            print("[Burst2Gif] 썸네일 캐시(data/thumbnails)가 초기화되었습니다.")
+    except Exception as e:
+        print(f"[Cleanup Error] {e}")
+
+import atexit
+atexit.register(cleanup_temp_files)
+
+@app.on_event("startup")
+async def on_startup():
+    """서버 시작 시 이전 잔여 임시 파일 완전 초기화"""
+    cleanup_temp_files()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    """서버 정상 종료 시 임시 파일 정리"""
+    cleanup_temp_files()
 
 # Pydantic 모델
 class ScanRequest(BaseModel):
@@ -77,7 +106,8 @@ async def health():
 
 @app.post("/api/shutdown")
 async def api_shutdown():
-    """서버 프로세스 안전 종료"""
+    """서버 프로세스 안전 종료 및 임시 파일 청소"""
+    cleanup_temp_files()
     import threading
     import time
     def delayed_exit():
