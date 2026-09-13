@@ -1,164 +1,152 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { InputSection } from './components/InputSection';
 import { TimelineGrid } from './components/TimelineGrid';
 import { PreviewPlayer } from './components/PreviewPlayer';
 import { ControlPanel } from './components/ControlPanel';
+import { ProgressModal } from './components/ProgressModal';
 import { ResultModal } from './components/ResultModal';
-import { ImageItem, ConvertOptions, JobStatus } from './types';
-import { startConvert, getJobStatus, shutdownServer } from './api';
-import { PowerOff, CheckCircle2 } from 'lucide-react';
+
+import { ManagedFile } from './modules/FileManager';
+import { jobController, JobProgress, JobResult } from './modules/JobController';
+import { calculateOutputDimensions } from './modules/RiskEvaluator';
+import { cleanupOldOPFSTempFiles } from './modules/OutputSink';
 
 export const App: React.FC = () => {
-  const [images, setImages] = useState<ImageItem[]>([]);
+  const [files, setFiles] = useState<ManagedFile[]>([]);
   const [selectedFrame, setSelectedFrame] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isShutDown, setIsShutDown] = useState<boolean>(false);
+  const [fps, setFps] = useState<number>(12);
+  const [targetLongEdge, setTargetLongEdge] = useState<number>(1280); // 기본값: 1280px (보통 화질)
+  const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain');
+  const [loop, setLoop] = useState<number>(0); // 0 = 무한 반복
 
-  const [options, setOptions] = useState<ConvertOptions>({
-    format: 'gif',
-    fps: 12,
-    resolution: '1080',
-    quality_mode: 'high',
-    crf: 23,
-    loop: 0,
-  });
+  const [jobProgress, setJobProgress] = useState<JobProgress | null>(null);
+  const [jobResult, setJobResult] = useState<JobResult | null>(null);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const pollTimerRef = useRef<number | null>(null);
-
-  // 변환 시작 핸들러 (중복 클릭 원천 차단)
-  const handleConvert = async () => {
-    if (isSubmitting || images.length === 0 || jobStatus?.status === 'running' || jobStatus?.status === 'queued') {
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      const imagePaths = images.map((img) => img.path);
-      const jobId = await startConvert(imagePaths, options);
-      setJobStatus({
-        job_id: jobId,
-        status: 'queued',
-        progress: 10,
-        size_bytes: 0,
-        size_formatted: '0 B',
-      });
-    } catch (err: any) {
-      alert(err.message || '변환 요청에 실패했습니다.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Job Polling
+  // 이전 세션 잔여 OPFS 임시 파일 정리
   useEffect(() => {
-    if (!jobStatus || jobStatus.status === 'completed' || jobStatus.status === 'failed') {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-      return;
-    }
+    cleanupOldOPFSTempFiles();
+  }, []);
 
-    pollTimerRef.current = window.setInterval(async () => {
-      try {
-        const latest = await getJobStatus(jobStatus.job_id);
-        setJobStatus(latest);
-      } catch (e) {
-        console.error('Job status polling error', e);
+  // GIF 만들기 시작
+  const handleStartConvert = async () => {
+    if (files.length === 0 || isProcessing) return;
+
+    // 첫 번째 사진 기준 대략적인 원본 비율 계산 (또는 3:2 기본)
+    const { width: targetWidth, height: targetHeight } = calculateOutputDimensions(
+      3,
+      2,
+      targetLongEdge
+    );
+
+    setIsProcessing(true);
+    setJobResult(null);
+    setJobProgress({
+      currentFrame: 0,
+      totalFrames: files.length,
+      currentBytes: 0,
+      fileName: files[0]?.name || '',
+      percent: 0,
+    });
+
+    const rawFiles = files.map((f) => f.file);
+
+    jobController.startJob(
+      rawFiles,
+      {
+        targetWidth,
+        targetHeight,
+        fps,
+        loop,
+        fitMode,
+      },
+      (progress) => {
+        setJobProgress(progress);
+      },
+      (result) => {
+        setIsProcessing(false);
+        setJobProgress(null);
+        setJobResult(result);
+      },
+      (errorMessage) => {
+        setIsProcessing(false);
+        setJobProgress(null);
+        alert(`오류: ${errorMessage}`);
       }
-    }, 1000);
-
-    return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    };
-  }, [jobStatus]);
-
-  // 서버 종료 핸들러
-  const handleShutdown = async () => {
-    await shutdownServer();
-    setIsShutDown(true);
+    );
   };
 
-  if (isShutDown) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-4">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-16 h-16 bg-rose-500/10 text-rose-400 rounded-2xl flex items-center justify-center mx-auto border border-rose-500/20">
-            <PowerOff className="w-8 h-8" />
-          </div>
-          <h2 className="text-xl font-bold text-white">Burst2Gif 가 종료되었습니다</h2>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            백엔드 서버와 콘솔 창이 안전하게 닫혔습니다.<br />
-            이제 이 브라우저 탭을 닫으셔도 됩니다.
-          </p>
-          <div className="pt-2">
-            <span className="text-xs text-slate-500 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-              다시 실행하시려면 run.bat을 더블 클릭해 주세요
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // 변환 취소
+  const handleCancelConvert = () => {
+    jobController.cancelJob();
+    setIsProcessing(false);
+    setJobProgress(null);
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      <Header onShutdown={handleShutdown} />
+      <Header />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
-        {/* 상단 입력 섹션 */}
+        {/* 상단 파일/폴더 선택 섹션 */}
         <InputSection
-          onImagesLoaded={(loaded) => {
-            setImages(loaded);
+          onFilesSelected={(newFiles) => {
+            setFiles((prev) => [...prev, ...newFiles]);
             setSelectedFrame(0);
           }}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
+          isLoading={isProcessing}
         />
 
-        {/* 2열 메인 레이아웃 */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* 좌측 (7열): 타임라인 그리드 (순서 편집/삭제) */}
-          <div className="lg:col-span-7 space-y-6">
-            <TimelineGrid
-              images={images}
-              onImagesChange={setImages}
-              selectedFrameIndex={selectedFrame}
-              onSelectFrame={setSelectedFrame}
-            />
-          </div>
+        {files.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* 좌측 (7열): 타임라인 그리드 (온디맨드 썸네일, 순서 편집, 삭제) */}
+            <div className="lg:col-span-7 space-y-6">
+              <TimelineGrid
+                files={files}
+                onFilesChange={setFiles}
+                selectedFrameIndex={selectedFrame}
+                onSelectFrame={setSelectedFrame}
+              />
+            </div>
 
-          {/* 우측 (5열): 실시간 프리뷰어 & 제어 패널 */}
-          <div className="lg:col-span-5 space-y-6">
-            <PreviewPlayer
-              images={images}
-              fps={options.fps}
-              currentFrame={selectedFrame}
-              setCurrentFrame={setSelectedFrame}
-            />
+            {/* 우측 (5열): 실시간 미리보기 및 제어 패널 */}
+            <div className="lg:col-span-5 space-y-6">
+              <PreviewPlayer
+                files={files}
+                fps={fps}
+                currentFrame={selectedFrame}
+                setCurrentFrame={setSelectedFrame}
+              />
 
-            <ControlPanel
-              options={options}
-              onOptionsChange={setOptions}
-              onConvert={handleConvert}
-              isLoading={isLoading}
-              isSubmitting={isSubmitting}
-              disabled={
-                images.length === 0 ||
-                isLoading ||
-                isSubmitting ||
-                jobStatus?.status === 'running' ||
-                jobStatus?.status === 'queued'
-              }
-            />
+              <ControlPanel
+                fileCount={files.length}
+                fps={fps}
+                onFpsChange={setFps}
+                targetLongEdge={targetLongEdge}
+                onTargetLongEdgeChange={setTargetLongEdge}
+                fitMode={fitMode}
+                onFitModeChange={setFitMode}
+                loop={loop}
+                onLoopChange={setLoop}
+                onSubmit={handleStartConvert}
+                isProcessing={isProcessing}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
-      {/* 결과 & 진행률 모달 */}
+      {/* 작업 진행률 모달 */}
+      <ProgressModal
+        progress={jobProgress}
+        onCancel={handleCancelConvert}
+      />
+
+      {/* 최종 결과 모달 */}
       <ResultModal
-        status={jobStatus}
-        onClose={() => setJobStatus(null)}
+        result={jobResult}
+        onClose={() => setJobResult(null)}
       />
     </div>
   );
