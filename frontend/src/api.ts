@@ -76,3 +76,12 @@ export async function openFolder(jobId: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function shutdownServer(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/shutdown`, { method: 'POST' });
+    return res.ok;
+  } catch {
+    return true; // 서버가 바로 꺼져서 fetch가 끊겨도 성공으로 간주
+  }
+}

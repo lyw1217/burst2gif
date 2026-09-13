@@ -33,5 +33,4 @@ start "" http://localhost:8000
 
 echo Starting backend server on http://127.0.0.1:8000 ...
 .\venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
-
-pause
+if errorlevel 1 pause

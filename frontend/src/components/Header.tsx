@@ -1,7 +1,17 @@
 import React from 'react';
-import { Film, Zap } from 'lucide-react';
+import { Film, Zap, Power } from 'lucide-react';
 
-export const Header: React.FC = () => {
+interface Props {
+  onShutdown: () => void;
+}
+
+export const Header: React.FC<Props> = ({ onShutdown }) => {
+  const handleShutdownClick = () => {
+    if (window.confirm('Burst2Gif 서비스를 종료하시겠습니까?\n(백엔드 서버와 콘솔 창이 완전히 닫힙니다)')) {
+      onShutdown();
+    }
+  };
+
   return (
     <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-40 px-6 py-4">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -22,9 +32,20 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        <div className="text-xs text-slate-400 hidden sm:block text-right">
-          <span className="text-emerald-400 font-medium">● FFmpeg 네이티브 연동</span>
-          <p className="text-slate-500">2-Pass 고화질 팔레트 지원</p>
+        <div className="flex items-center gap-4">
+          <div className="text-xs text-slate-400 hidden sm:block text-right">
+            <span className="text-emerald-400 font-medium">● FFmpeg 네이티브 연동</span>
+            <p className="text-slate-500">2-Pass 고화질 팔레트 지원</p>
+          </div>
+
+          <button
+            onClick={handleShutdownClick}
+            title="Burst2Gif 서버 종료"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-600 border border-rose-500/30 rounded-xl transition shadow-sm"
+          >
+            <Power className="w-3.5 h-3.5" />
+            <span>종료</span>
+          </button>
         </div>
       </div>
     </header>

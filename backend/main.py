@@ -75,6 +75,18 @@ class ConvertRequest(BaseModel):
 async def health():
     return {"status": "ok"}
 
+@app.post("/api/shutdown")
+async def api_shutdown():
+    """서버 프로세스 안전 종료"""
+    import threading
+    import time
+    def delayed_exit():
+        time.sleep(0.5)
+        os._exit(0)
+
+    threading.Thread(target=delayed_exit, daemon=True).start()
+    return {"success": True, "message": "서버가 안전하게 종료되었습니다."}
+
 @app.post("/api/scan")
 async def api_scan(request: ScanRequest):
     """로컬 디렉토리 경로를 받아 내부의 지원 이미지들을 정렬하여 반환"""
