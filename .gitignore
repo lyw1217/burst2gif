@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/venv/
+venv/
+ENV/
+
+# Data & Temp files
+backend/data/
+backend/test_sample_burst/
+*.log
+
+# Node & Frontend
+frontend/node_modules/
+.npm
+*.tsbuildinfo
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
