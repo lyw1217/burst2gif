@@ -49,11 +49,15 @@ self.onmessage = async (e: MessageEvent<WorkerInMessage>) => {
 
         const file = files[i];
 
-        // 4-1. 얼리 리사이즈 (createImageBitmap 단계에서 긴 변을 맞춤 디코딩하여 230MB 픽셀 버퍼 미생성)
+        // 4-1. 얼리 리사이즈 (긴 변에 맞춰 디코딩하여 230MB 픽셀 버퍼 미생성)
+        const isLandscape = targetWidth >= targetHeight;
         let bitmap: ImageBitmap;
         try {
-          bitmap = await createImageBitmap(file, {
+          bitmap = await createImageBitmap(file, isLandscape ? {
             resizeWidth: targetWidth,
+            resizeQuality: 'medium',
+          } : {
+            resizeHeight: targetHeight,
             resizeQuality: 'medium',
           });
         } catch (decodeErr: any) {

@@ -19,6 +19,7 @@ export const App: React.FC = () => {
   const [targetLongEdge, setTargetLongEdge] = useState<number>(1280); // 기본값: 1280px (보통 화질)
   const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain');
   const [loop, setLoop] = useState<number>(0); // 0 = 무한 반복
+  const [aspectDimensions, setAspectDimensions] = useState<{ width: number; height: number }>({ width: 3, height: 2 });
 
   const [jobProgress, setJobProgress] = useState<JobProgress | null>(null);
   const [jobResult, setJobResult] = useState<JobResult | null>(null);
@@ -29,14 +30,30 @@ export const App: React.FC = () => {
     cleanupOldOPFSTempFiles();
   }, []);
 
+  // 첫 번째 사진의 실제 종횡비 자동 감지
+  useEffect(() => {
+    if (files.length > 0) {
+      let isMounted = true;
+      createImageBitmap(files[0].file).then((bmp) => {
+        if (isMounted) {
+          setAspectDimensions({ width: bmp.width, height: bmp.height });
+        }
+        bmp.close();
+      }).catch(() => {});
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [files]);
+
   // GIF 만들기 시작
   const handleStartConvert = async () => {
     if (files.length === 0 || isProcessing) return;
 
-    // 첫 번째 사진 기준 대략적인 원본 비율 계산 (또는 3:2 기본)
+    // 실제 원본 종횡비에 맞는 정확한 출력 치수 계산
     const { width: targetWidth, height: targetHeight } = calculateOutputDimensions(
-      3,
-      2,
+      aspectDimensions.width,
+      aspectDimensions.height,
       targetLongEdge
     );
 
@@ -131,6 +148,7 @@ export const App: React.FC = () => {
                 onLoopChange={setLoop}
                 onSubmit={handleStartConvert}
                 isProcessing={isProcessing}
+                aspectDimensions={aspectDimensions}
               />
             </div>
           </div>

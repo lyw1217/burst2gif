@@ -14,6 +14,7 @@ interface Props {
   onLoopChange: (loop: number) => void;
   onSubmit: () => void;
   isProcessing: boolean;
+  aspectDimensions?: { width: number; height: number };
 }
 
 export const ControlPanel: React.FC<Props> = ({
@@ -28,9 +29,15 @@ export const ControlPanel: React.FC<Props> = ({
   onLoopChange,
   onSubmit,
   isProcessing,
+  aspectDimensions = { width: 3, height: 2 },
 }) => {
-  // 기준 비율 3:2 가정하여 WorkPixels 계산
-  const { width: outW, height: outH } = calculateOutputDimensions(3, 2, targetLongEdge);
+  // 실제 감지된 종횡비에 맞춰 정확한 WorkPixels 및 출력 치수 계산
+  const { width: outW, height: outH } = calculateOutputDimensions(
+    aspectDimensions.width,
+    aspectDimensions.height,
+    targetLongEdge
+  );
+  const isLandscape = outW >= outH;
   const risk = evaluateRisk(outW, outH, fileCount);
 
   const presets = [
@@ -46,6 +53,9 @@ export const ControlPanel: React.FC<Props> = ({
           <Settings2 className="w-5 h-5 text-indigo-400" />
           <h2 className="text-base font-bold text-white">GIF 생성 옵션</h2>
         </div>
+        <span className="text-xs font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+          {outW} × {outH} ({isLandscape ? '가로형' : '세로형'})
+        </span>
       </div>
 
       {/* 1. 크기 선택 (Resolution Presets) */}
