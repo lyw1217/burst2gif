@@ -117,7 +117,7 @@ export const ResultModal: React.FC<Props> = ({ status, onClose }) => {
                   className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-xl border border-slate-700 flex items-center justify-center gap-2 text-sm transition"
                 >
                   <FolderOpen className="w-4 h-4 text-indigo-400" />
-                  탐색기에서 열기
+                  저장 폴더 열기
                 </button>
               </div>
             </div>

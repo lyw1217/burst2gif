@@ -8,8 +8,11 @@ on:
 
 jobs:
   backend-test:
-    name: Backend Unit & API Tests
-    runs-on: ubuntu-latest
+    name: Backend Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

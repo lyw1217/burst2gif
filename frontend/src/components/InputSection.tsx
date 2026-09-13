@@ -125,7 +125,7 @@ export const InputSection: React.FC<Props> = ({ onImagesLoaded, isLoading, setIs
                 type="text"
                 value={folderPath}
                 onChange={(e) => setFolderPath(e.target.value)}
-                placeholder="예: C:\Users\사진\연사폴더 또는 D:\Photos\Burst_01"
+                placeholder="예: C:\Photos\Burst 또는 /Users/사용자명/Pictures/Burst"
                 className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
             </div>

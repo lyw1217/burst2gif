@@ -27,19 +27,40 @@
 
 ## 🚀 실행 방법
 
-### 방법 1. 원클릭 실행 (가장 간편)
-프로젝트 루트의 **`run.bat`** 파일을 더블 클릭하면 서버가 구동되고 자동으로 브라우저(`http://localhost:8000`)가 열립니다.
+### 1. 사전 준비 (FFmpeg)
+고화질 GIF 및 MP4 인코딩을 위해 시스템에 FFmpeg가 필요합니다.
+- **macOS (맥북)**:
+  ```bash
+  brew install ffmpeg
+  ```
+- **Windows**:
+  - `run.bat` 실행 시 기본적으로 환경에 등록된 FFmpeg를 사용합니다. (미설치 시 [ffmpeg.org](https://ffmpeg.org/download.html) 또는 `winget install Gyan.FFmpeg`)
 
-### 방법 2. 수동 실행 (터미널)
+---
+
+### 2. 서비스 실행
+
+#### 🍎 macOS / Linux (맥북)
+터미널에서 프로젝트 루트 디렉토리로 이동 후 아래 명령어를 실행합니다:
 ```bash
-# 백엔드 실행
-cd backend
-.\venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
+./run.sh
 ```
-브라우저에서 `http://localhost:8000`으로 접속합니다.
+> 가상환경 생성, 패키지 설치, FFmpeg 점검 후 기본 브라우저(`http://localhost:8000`)가 자동으로 열립니다.
+
+#### 🪟 Windows
+프로젝트 루트의 **`run.bat`** 파일을 더블 클릭하면 자동으로 환경을 셋업하고 브라우저(`http://localhost:8000`)가 열립니다.
+
+---
+
+### 3. 무결성 테스트 실행
+코드 수정 후 문제가 없는지 검증하려면:
+- **macOS / Linux**: `./test.sh`
+- **Windows**: `test.bat` 더블 클릭
 
 ---
 
 ## 🛠️ 기술 스택
-- **Backend**: Python 3.10, FastAPI, Uvicorn, Pillow, FFmpeg CLI
+- **Backend**: Python 3.10+, FastAPI, Uvicorn, Pillow, FFmpeg CLI
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS v4, Lucide Icons
+- **CI/CD**: GitHub Actions (Ubuntu & macOS Multi-OS Matrix)
+

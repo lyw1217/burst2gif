@@ -107,6 +107,43 @@ class TestAPI(unittest.TestCase):
         finally:
             jobs.pop("fake_active_job", None)
 
+    def test_open_folder_cross_platform(self):
+        """OS별(Windows, macOS, Linux) 파일 위치 열기 명령어 분기 모의 검증"""
+        from unittest.mock import patch
+        
+        fake_job = EncodingJob("test_open_job", "gif")
+        fake_file = Path("dummy_output.gif")
+        fake_file.write_bytes(b"dummy")
+        fake_job.output_file = fake_file
+        jobs["test_open_job"] = fake_job
+
+        try:
+            # 1. Windows 테스트
+            with patch("platform.system", return_value="Windows"), patch("subprocess.run") as mock_sub:
+                res = self.client.post("/api/open-folder/test_open_job")
+                self.assertEqual(res.status_code, 200)
+                mock_sub.assert_called_once()
+                self.assertEqual(mock_sub.call_args[0][0][0], "explorer")
+
+            # 2. macOS (Darwin) 테스트
+            with patch("platform.system", return_value="Darwin"), patch("subprocess.run") as mock_sub:
+                res = self.client.post("/api/open-folder/test_open_job")
+                self.assertEqual(res.status_code, 200)
+                mock_sub.assert_called_once()
+                self.assertEqual(mock_sub.call_args[0][0][0], "open")
+                self.assertEqual(mock_sub.call_args[0][0][1], "-R")
+
+            # 3. Linux 테스트
+            with patch("platform.system", return_value="Linux"), patch("subprocess.run") as mock_sub:
+                res = self.client.post("/api/open-folder/test_open_job")
+                self.assertEqual(res.status_code, 200)
+                mock_sub.assert_called_once()
+                self.assertEqual(mock_sub.call_args[0][0][0], "xdg-open")
+        finally:
+            jobs.pop("test_open_job", None)
+            fake_file.unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()
+

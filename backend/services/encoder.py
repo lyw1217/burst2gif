@@ -39,16 +39,27 @@ def get_scale_filter(resolution: str) -> str:
 
 async def execute_ffmpeg(cmd: List[str]) -> bool:
     """FFmpeg 명령어 비동기 실행"""
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
-    stdout, stderr = await process.communicate()
-    if process.returncode != 0:
-        print(f"[FFmpeg Error]: {stderr.decode(errors='replace')}")
-        return False
-    return True
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            print(f"[FFmpeg Error]: {stderr.decode(errors='replace')}")
+            return False
+        return True
+    except FileNotFoundError:
+        import platform
+        sys_name = platform.system()
+        if sys_name == "Darwin":
+            guide = "macOS 환경에서는 터미널에서 'brew install ffmpeg'로 FFmpeg를 설치해 주세요."
+        elif sys_name == "Windows":
+            guide = "Windows 환경에서는 FFmpeg가 설치되어 시스템 PATH에 등록되어 있어야 합니다."
+        else:
+            guide = "Linux 환경에서는 'sudo apt install ffmpeg' 등으로 FFmpeg를 설치해 주세요."
+        raise RuntimeError(f"FFmpeg 실행 파일을 찾을 수 없습니다. {guide}")
 
 async def run_encode(
     job_id: str,

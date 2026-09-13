@@ -242,13 +242,23 @@ async def api_download(job_id: str):
 
 @app.post("/api/open-folder/{job_id}")
 async def api_open_folder(job_id: str):
-    """로컬 윈도우 탐색기에서 결과 파일 위치 열기 (로컬 편의 기능)"""
+    """로컬 파일 관리자(Windows 탐색기 / macOS Finder / Linux)에서 결과 파일 위치 열기"""
     job = jobs.get(job_id)
     if not job or not job.output_file or not job.output_file.exists():
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
     try:
-        subprocess.run(["explorer", f"/select,{str(job.output_file.resolve())}"])
+        import platform
+        system = platform.system()
+        target_path = str(job.output_file.resolve())
+
+        if system == "Windows":
+            subprocess.run(["explorer", f"/select,{target_path}"], check=False)
+        elif system == "Darwin":  # macOS
+            subprocess.run(["open", "-R", target_path], check=False)
+        else:  # Linux
+            subprocess.run(["xdg-open", str(job.output_file.parent.resolve())], check=False)
+
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
