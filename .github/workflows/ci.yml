@@ -5,35 +5,33 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   backend-test:
-    name: Backend Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    name: Backend Tests (self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
+          python3 -m pip install --upgrade pip
+          pip3 install -r backend/requirements.txt
 
       - name: Run Backend Tests
         run: |
-          python -m unittest discover backend/tests -v
+          python3 -m unittest discover backend/tests -v
 
   frontend-test:
-    name: Frontend TypeScript & Build Tests
-    runs-on: ubuntu-latest
+    name: Frontend TypeScript & Build Tests (self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
