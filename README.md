@@ -1,6 +1,6 @@
 # Burst2Gif (무설치 브라우저 전용 연사 사진 GIF 변환기)
 
-👉 **웹사이트 바로가기**: **[https://frontend-ten-dusky-24.vercel.app](https://frontend-ten-dusky-24.vercel.app)**
+👉 **웹사이트 바로가기**: **[https://burst2gif.vercel.app](https://burst2gif.vercel.app)**
 
 > **🔒 사진은 서버로 업로드되지 않습니다.**  
 > 모든 이미지 디코딩, 리사이즈, 양자화, GIF 인코딩이 **100% 사용자의 웹 브라우저 내부에서만** 안전하게 처리됩니다.
