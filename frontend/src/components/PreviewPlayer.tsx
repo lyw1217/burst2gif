@@ -17,7 +17,13 @@ export const PreviewPlayer: React.FC<Props> = ({
   setCurrentFrame,
 }) => {
   const [isPlaying, setIsPlaying] = useState(true);
-  const timerRef = useRef<number | null>(null);
+  // 썸네일 브라우저 백그라운드 프리로딩 (첫 재생 시 깜빡임 방지)
+  useEffect(() => {
+    images.forEach((img) => {
+      const preloadImg = new Image();
+      preloadImg.src = getThumbnailUrl(img.path);
+    });
+  }, [images]);
 
   // Play/Pause 애니메이션 루프
   useEffect(() => {

@@ -43,6 +43,20 @@ async def add_no_cache_header(request, call_next):
         response.headers["Expires"] = "0"
     return response
 
+@app.on_event("startup")
+async def cleanup_old_temp_files():
+    """서버 시작 시 24시간 이상 지난 임시 업로드 폴더 자동 정리"""
+    import shutil
+    import time
+    try:
+        now = time.time()
+        if TEMP_DIR.exists():
+            for item in TEMP_DIR.iterdir():
+                if item.is_dir() and (now - item.stat().st_mtime > 86400):
+                    shutil.rmtree(item, ignore_errors=True)
+    except Exception as e:
+        print(f"[Cleanup Note] {e}")
+
 # Pydantic 모델
 class ScanRequest(BaseModel):
     folder_path: str

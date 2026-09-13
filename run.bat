@@ -9,9 +9,23 @@ echo.
 cd /d "%~dp0backend"
 
 if not exist "venv\Scripts\python.exe" (
-    echo [ERROR] Python venv not found. Please check backend setup.
-    pause
-    exit /b 1
+    echo [SETUP] Python virtual environment not found. Setting up venv...
+    python -m venv venv
+    if errorlevel 1 (
+        echo [ERROR] Python is not installed or not found in system PATH.
+        echo Please install Python 3.10 or higher.
+        pause
+        exit /b 1
+    )
+    echo [SETUP] Installing required Python packages...
+    .\venv\Scripts\pip install -r requirements.txt
+    if errorlevel 1 (
+        echo [ERROR] Failed to install requirements.
+        pause
+        exit /b 1
+    )
+    echo [SETUP] Setup completed successfully!
+    echo.
 )
 
 echo Opening browser at http://localhost:8000 ...
