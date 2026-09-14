@@ -37,3 +37,11 @@ jobs:
       - name: Run Production Build Check
         working-directory: ./frontend
         run: npm run build
+
+      - name: Install Playwright Browsers
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E Tests (Playwright)
+        working-directory: ./frontend
+        run: npm run test:e2e

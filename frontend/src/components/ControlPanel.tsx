@@ -9,6 +9,7 @@ import {
   Palette,
   Sliders,
   Zap,
+  Info,
 } from 'lucide-react';
 import { evaluateRisk, calculateOutputDimensions } from '../modules/RiskEvaluator';
 import { PlaybackPlan, PlaybackMode } from '../modules/PlaybackPlan';
@@ -81,7 +82,7 @@ export const ControlPanel: React.FC<Props> = ({
   const isLandscape = outW >= outH;
 
   // 왕복 / 건너뛰기 등이 반영된 실제 인코딩 프레임 수 기준 위험도 평가
-  const risk = evaluateRisk(outW, outH, plan.encodedFrameCount);
+  const risk = evaluateRisk(outW, outH, plan.encodedFrameCount, qualityMode);
 
   const presets = [
     { label: '작은 용량', width: 960, desc: '메신저 / 공유' },
@@ -383,6 +384,20 @@ export const ControlPanel: React.FC<Props> = ({
       </div>
 
       {/* 7. 작업량 기반 안전장치 카드 (Risk Evaluator) */}
+      {risk.ditherWarning && (
+        <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-amber-300 space-y-1">
+          <div className="flex items-start gap-2 text-xs">
+            <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-bold text-amber-200">고화질 디더링 모드 안내</span>
+              <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                {risk.ditherWarning}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {risk.level === 'very_heavy' && (
         <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 space-y-1.5">
           <div className="flex items-center gap-2 text-xs font-bold">

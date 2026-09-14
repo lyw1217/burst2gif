@@ -12,6 +12,7 @@ import { jobController, JobProgress, JobResult } from './modules/JobController';
 import { calculateOutputDimensions } from './modules/RiskEvaluator';
 import { cleanupOldOPFSTempFiles, checkStorageQuota } from './modules/OutputSink';
 import { generatePlaybackPlan, PlaybackMode } from './modules/PlaybackPlan';
+import { resolveTrimRange, adjustTrimOnDelete, resetTrim, TrimSelection } from './modules/TrimManager';
 import { AlertTriangle, AlertCircle, X } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -23,7 +24,7 @@ export const App: React.FC = () => {
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('forward');
   const [loop, setLoop] = useState<number>(0); // 0 = 무한 반복
   const [frameSkip, setFrameSkip] = useState<number>(1); // 1 = 전체, 2 = 2장마다 1장...
-  const [trimRange, setTrimRange] = useState<[number, number]>([0, 0]);
+  const [trimSelection, setTrimSelection] = useState<TrimSelection>({ startId: null, endId: null });
   const [firstFramePauseMs, setFirstFramePauseMs] = useState<number>(0);
   const [lastFramePauseMs, setLastFramePauseMs] = useState<number>(0);
   const [backgroundColor, setBackgroundColor] = useState<string>('#000000');
@@ -39,23 +40,37 @@ export const App: React.FC = () => {
   const [jobResult, setJobResult] = useState<JobResult | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
+  // 고유 File ID 기반 시작/끝 구간을 실제 인덱스로 계산 (순서 변경/삭제 엣지 케이스 완벽 방어)
+  const trimRange = useMemo<[number, number]>(() => {
+    return resolveTrimRange(files, trimSelection);
+  }, [files, trimSelection]);
+
   // 이전 세션 잔여 OPFS 임시 파일 정리
   useEffect(() => {
     cleanupOldOPFSTempFiles();
   }, []);
 
-  // 파일 목록 변경 시 Trim 범위 보정
-  useEffect(() => {
-    if (files.length > 0) {
-      setTrimRange(([s, e]) => {
-        const validStart = Math.min(Math.max(0, s), files.length - 1);
-        const validEnd = e === 0 && s === 0 ? files.length - 1 : Math.min(Math.max(validStart, e), files.length - 1);
-        return [validStart, validEnd];
-      });
-    } else {
-      setTrimRange([0, 0]);
-    }
-  }, [files.length]);
+  const handleSetTrimStart = (fileId: string) => {
+    setTrimSelection((prev) => ({ ...prev, startId: fileId }));
+  };
+
+  const handleSetTrimEnd = (fileId: string) => {
+    setTrimSelection((prev) => ({ ...prev, endId: fileId }));
+  };
+
+  const handleResetTrim = () => {
+    setTrimSelection(resetTrim());
+  };
+
+  const handleDeleteFile = (deletedIndex: number) => {
+    setTrimSelection((prev) => adjustTrimOnDelete(files, deletedIndex, prev));
+    setFiles((prev) => prev.filter((_, i) => i !== deletedIndex));
+  };
+
+  const handleClearAll = () => {
+    setFiles([]);
+    setTrimSelection(resetTrim());
+  };
 
   // 첫 번째 사진의 실제 종횡비 자동 감지 및 가로/세로 혼합 여부 전수 판별
   useEffect(() => {
@@ -240,7 +255,7 @@ export const App: React.FC = () => {
           }}
           isLoading={isProcessing}
           existingFiles={files}
-          onClearAll={() => setFiles([])}
+          onClearAll={handleClearAll}
         />
 
         {files.length > 0 && (
@@ -252,7 +267,10 @@ export const App: React.FC = () => {
               selectedFrameIndex={selectedFrame}
               onSelectFrame={setSelectedFrame}
               trimRange={trimRange}
-              onTrimRangeChange={setTrimRange}
+              onSetTrimStart={handleSetTrimStart}
+              onSetTrimEnd={handleSetTrimEnd}
+              onResetTrim={handleResetTrim}
+              onDeleteFile={handleDeleteFile}
             />
 
             {/* 3. 하단 2열 레이아웃: 대형 1:1 미리보기(7열) + 옵션 패널(5열) */}

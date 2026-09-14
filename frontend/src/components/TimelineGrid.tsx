@@ -20,6 +20,10 @@ interface Props {
   onSelectFrame: (index: number) => void;
   trimRange?: [number, number];
   onTrimRangeChange?: (range: [number, number]) => void;
+  onSetTrimStart?: (fileId: string) => void;
+  onSetTrimEnd?: (fileId: string) => void;
+  onResetTrim?: () => void;
+  onDeleteFile?: (index: number) => void;
 }
 
 // 뷰포트에 들어올 때만 온디맨드로 썸네일을 생성하는 개별 썸네일 카드
@@ -98,6 +102,10 @@ export const TimelineGrid: React.FC<Props> = ({
   onSelectFrame,
   trimRange = [0, Math.max(0, files.length - 1)],
   onTrimRangeChange,
+  onSetTrimStart,
+  onSetTrimEnd,
+  onResetTrim,
+  onDeleteFile,
 }) => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
@@ -116,22 +124,33 @@ export const TimelineGrid: React.FC<Props> = ({
 
   // 구간 설정 핸들러
   const handleSetStart = () => {
-    if (!onTrimRangeChange) return;
-    const newStart = selectedFrameIndex;
-    const newEnd = Math.max(newStart, trimEnd);
-    onTrimRangeChange([newStart, newEnd]);
+    const selectedFile = files[selectedFrameIndex];
+    if (selectedFile && onSetTrimStart) {
+      onSetTrimStart(selectedFile.id);
+    } else if (onTrimRangeChange) {
+      const newStart = selectedFrameIndex;
+      const newEnd = Math.max(newStart, trimEnd);
+      onTrimRangeChange([newStart, newEnd]);
+    }
   };
 
   const handleSetEnd = () => {
-    if (!onTrimRangeChange) return;
-    const newEnd = selectedFrameIndex;
-    const newStart = Math.min(newEnd, trimStart);
-    onTrimRangeChange([newStart, newEnd]);
+    const selectedFile = files[selectedFrameIndex];
+    if (selectedFile && onSetTrimEnd) {
+      onSetTrimEnd(selectedFile.id);
+    } else if (onTrimRangeChange) {
+      const newEnd = selectedFrameIndex;
+      const newStart = Math.min(newEnd, trimStart);
+      onTrimRangeChange([newStart, newEnd]);
+    }
   };
 
   const handleResetTrim = () => {
-    if (!onTrimRangeChange) return;
-    onTrimRangeChange([0, Math.max(0, files.length - 1)]);
+    if (onResetTrim) {
+      onResetTrim();
+    } else if (onTrimRangeChange) {
+      onTrimRangeChange([0, Math.max(0, files.length - 1)]);
+    }
   };
 
   // 개별 삭제
@@ -140,15 +159,19 @@ export const TimelineGrid: React.FC<Props> = ({
     if (target) {
       thumbnailManager.revoke(target.id);
     }
-    const updated = files.filter((_, i) => i !== index);
-    onFilesChange(updated);
-    if (selectedFrameIndex >= updated.length) {
-      onSelectFrame(Math.max(0, updated.length - 1));
+    if (onDeleteFile) {
+      onDeleteFile(index);
+    } else {
+      const updated = files.filter((_, i) => i !== index);
+      onFilesChange(updated);
+      if (onTrimRangeChange && updated.length > 0) {
+        const newEnd = Math.min(trimEnd, updated.length - 1);
+        const newStart = Math.min(trimStart, newEnd);
+        onTrimRangeChange([newStart, newEnd]);
+      }
     }
-    if (onTrimRangeChange && updated.length > 0) {
-      const newEnd = Math.min(trimEnd, updated.length - 1);
-      const newStart = Math.min(trimStart, newEnd);
-      onTrimRangeChange([newStart, newEnd]);
+    if (selectedFrameIndex >= files.length - 1) {
+      onSelectFrame(Math.max(0, files.length - 2));
     }
   };
 
@@ -228,7 +251,7 @@ export const TimelineGrid: React.FC<Props> = ({
 
         {/* Trim Controls & Sorting */}
         <div className="flex flex-wrap items-center gap-2">
-          {onTrimRangeChange && (
+          {(onTrimRangeChange || onSetTrimStart) && (
             <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
               <button
                 type="button"

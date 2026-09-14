@@ -93,6 +93,7 @@ export const InputSection: React.FC<Props> = ({
         multiple
         accept=".jpg,.jpeg,.png,.webp,.bmp"
         className="hidden"
+        data-testid="file-upload-input"
         onChange={(e) => handleRawFiles(e.target.files)}
       />
       <input

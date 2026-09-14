@@ -13,8 +13,16 @@ function clamp(val: number, min: number, max: number): number {
  */
 export function createPaletteMatcher(palette: number[][]) {
   const cache = new Int16Array(65536).fill(-1);
+  const palLen = palette.length;
+  // 메모리 참조 최적화를 위한 1차원 평탄화 배열
+  const flatPalette = new Uint8Array(palLen * 3);
+  for (let i = 0; i < palLen; i++) {
+    flatPalette[i * 3] = palette[i][0];
+    flatPalette[i * 3 + 1] = palette[i][1];
+    flatPalette[i * 3 + 2] = palette[i][2];
+  }
 
-  return function findNearest(r: number, g: number, b: number): number {
+  function findNearest(r: number, g: number, b: number): number {
     const key = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
     const cached = cache[key];
     if (cached !== -1) return cached;
@@ -22,11 +30,13 @@ export function createPaletteMatcher(palette: number[][]) {
     let bestDist = Infinity;
     let bestIdx = 0;
 
-    for (let i = 0; i < palette.length; i++) {
-      const color = palette[i];
-      const dr = r - color[0];
-      const dg = g - color[1];
-      const db = b - color[2];
+    for (let i = 0; i < palLen; i++) {
+      const pR = flatPalette[i * 3];
+      const pG = flatPalette[i * 3 + 1];
+      const pB = flatPalette[i * 3 + 2];
+      const dr = r - pR;
+      const dg = g - pG;
+      const db = b - pB;
       const dist = dr * dr + dg * dg + db * db;
       if (dist < bestDist) {
         bestDist = dist;
@@ -37,7 +47,10 @@ export function createPaletteMatcher(palette: number[][]) {
 
     cache[key] = bestIdx;
     return bestIdx;
-  };
+  }
+
+  (findNearest as any).flatPalette = flatPalette;
+  return findNearest as typeof findNearest & { flatPalette: Uint8Array };
 }
 
 /**
@@ -52,6 +65,7 @@ export function applyFloydSteinbergDither(
   const totalPixels = width * height;
   const indexed = new Uint8Array(totalPixels);
   const matchColor = createPaletteMatcher(palette);
+  const flatPalette = matchColor.flatPalette;
 
   // 현재 라인과 다음 라인의 RGB 누적 오차 버퍼 (signed float or 16-bit int)
   // [x * 3 + 0]: R, [x * 3 + 1]: G, [x * 3 + 2]: B
@@ -74,10 +88,10 @@ export function applyFloydSteinbergDither(
       const colorIdx = matchColor(r, g, b);
       indexed[y * width + x] = colorIdx;
 
-      const palColor = palette[colorIdx];
-      const errR = r - palColor[0];
-      const errG = g - palColor[1];
-      const errB = b - palColor[2];
+      const pOffset = colorIdx * 3;
+      const errR = r - flatPalette[pOffset];
+      const errG = g - flatPalette[pOffset + 1];
+      const errB = b - flatPalette[pOffset + 2];
 
       // Floyd-Steinberg 분배
       // x+1, y   : 7/16

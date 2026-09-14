@@ -73,12 +73,10 @@ export function generatePlaybackPlan(
   }
   mergedConfig.trimRange = [start, end];
 
-  // 2. 프레임 건너뛰기(Sampling) 및 전체 재생시간 보존 딜레이 계산
+  // 2. 프레임 건너뛰기(Sampling) 및 원본 재생시간 보존 딜레이 계산
   const fps = Math.max(0.1, mergedConfig.fps || 12);
   const baseDelayMs = Math.max(16, Math.round(1000 / fps));
   const step = Math.max(1, Math.floor(mergedConfig.frameSkip || 1));
-  // 건너뛴 비율만큼 프레임 딜레이를 곱해 전체 재생 시간을 거의 일정하게 유지
-  const sampledDelayMs = baseDelayMs * step;
 
   const sampledIndices: number[] = [];
   for (let i = start; i <= end; i += step) {
@@ -121,17 +119,33 @@ export function generatePlaybackPlan(
     }));
   }
 
-  // 4. 프레임별 딜레이 주입 (첫/마지막 프레임 정지시간 반영)
-  const frames: PlannedFrame[] = plannedSequence.map((item) => {
-    let delayMs = sampledDelayMs;
+  // 4. 원본 총 재생 시간 계산 및 샘플링 프레임 균등 시간 보존 분배
+  // 원본 프레임 수 (트리밍 구간 내 원본 사진 수)
+  const originalFrameCount = end - start + 1;
+  // 원본 1사이클 프레임 수 (Ping-Pong의 경우 2N - 2, 순방향은 N)
+  let originalCycleCount = originalFrameCount;
+  if (mergedConfig.playbackMode === 'ping-pong' && originalFrameCount > 2) {
+    originalCycleCount = 2 * originalFrameCount - 2;
+  }
+  const targetTotalDurationMs = originalCycleCount * baseDelayMs;
+
+  const sequenceLength = plannedSequence.length;
+  const baseSampledDelay = Math.floor(targetTotalDurationMs / sequenceLength);
+  const remainderDelay = targetTotalDurationMs % sequenceLength;
+
+  // 5. 프레임별 딜레이 주입 (첫/마지막 프레임 정지시간 반영)
+  const frames: PlannedFrame[] = plannedSequence.map((item, idx) => {
+    // 나머지 딜레이(remainderDelay)를 앞쪽 프레임들에 1ms씩 고르게 배분하여 총합을 100% 일치시킴
+    const frameStandardDelay = baseSampledDelay + (idx < remainderDelay ? 1 : 0);
+    let delayMs = frameStandardDelay;
 
     if (item.isFirst && mergedConfig.firstFramePauseMs > 0) {
-      delayMs = Math.max(sampledDelayMs, mergedConfig.firstFramePauseMs);
+      delayMs = Math.max(frameStandardDelay, mergedConfig.firstFramePauseMs);
     } else if (
       (item.isLast || item.isTurnaround) &&
       mergedConfig.lastFramePauseMs > 0
     ) {
-      delayMs = Math.max(sampledDelayMs, mergedConfig.lastFramePauseMs);
+      delayMs = Math.max(frameStandardDelay, mergedConfig.lastFramePauseMs);
     }
 
     return {
@@ -152,3 +166,4 @@ export function generatePlaybackPlan(
     config: mergedConfig,
   };
 }
+

@@ -7,6 +7,7 @@ export interface RiskAssessment {
   message: string;
   subMessage?: string;
   canProceed: boolean;
+  ditherWarning?: string;
 }
 
 /**
@@ -20,9 +21,15 @@ export interface RiskAssessment {
 export function evaluateRisk(
   outputWidth: number,
   outputHeight: number,
-  frameCount: number
+  frameCount: number,
+  qualityMode: 'fast' | 'high' = 'fast'
 ): RiskAssessment {
   const workPixels = outputWidth * outputHeight * frameCount;
+
+  let ditherWarning: string | undefined;
+  if (qualityMode === 'high' && (outputWidth >= 1920 || workPixels > 250_000_000)) {
+    ditherWarning = '고화질 디더링(1920px) 모드는 계조 표현이 뛰어나지만 정밀 오차 확산 연산으로 인해 변환 시간이 길어질 수 있습니다. 빠른 생성을 원하시면 1280px 이하 또는 빠른 생성 모드를 권장합니다.';
+  }
 
   if (workPixels <= 250_000_000) {
     return {
@@ -31,6 +38,7 @@ export function evaluateRisk(
       recommendedWidth: null,
       message: '안정적인 작업량입니다.',
       canProceed: true,
+      ditherWarning,
     };
   }
 
@@ -41,6 +49,7 @@ export function evaluateRisk(
       recommendedWidth: null,
       message: '사진 장수와 크기가 커서 처리 시간이 다소 걸릴 수 있습니다.',
       canProceed: true,
+      ditherWarning,
     };
   }
 
@@ -53,6 +62,7 @@ export function evaluateRisk(
       message: '사진이 많아 GIF 생성에 부담이 큰 설정입니다.',
       subMessage: `권장 크기: ${recommendedWidth}px`,
       canProceed: true,
+      ditherWarning,
     };
   }
 
@@ -65,6 +75,7 @@ export function evaluateRisk(
     message: '현재 설정으로는 브라우저에서 안정적으로 GIF를 만들기 어렵습니다.',
     subMessage: `사진 크기를 줄이면 안정적으로 만들 수 있습니다. (권장: ${recommendedWidth}px)`,
     canProceed: false,
+    ditherWarning,
   };
 }
 
