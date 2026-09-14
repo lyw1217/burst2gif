@@ -75,7 +75,7 @@ export function generatePlaybackPlan(
 
   // 2. 프레임 건너뛰기(Sampling) 및 원본 재생시간 보존 딜레이 계산
   const fps = Math.max(0.1, mergedConfig.fps || 12);
-  const baseDelayMs = Math.max(16, Math.round(1000 / fps));
+  const baseDelayMs = Math.max(20, Math.round(1000 / fps / 10) * 10);
   const step = Math.max(1, Math.floor(mergedConfig.frameSkip || 1));
 
   const sampledIndices: number[] = [];
@@ -119,7 +119,7 @@ export function generatePlaybackPlan(
     }));
   }
 
-  // 4. 원본 총 재생 시간 계산 및 샘플링 프레임 균등 시간 보존 분배
+  // 4. 원본 총 재생 시간 계산 및 샘플링 프레임 균등 시간 보존 분배 (GIF 10ms 단위 양자화)
   // 원본 프레임 수 (트리밍 구간 내 원본 사진 수)
   const originalFrameCount = end - start + 1;
   // 원본 1사이클 프레임 수 (Ping-Pong의 경우 2N - 2, 순방향은 N)
@@ -130,22 +130,25 @@ export function generatePlaybackPlan(
   const targetTotalDurationMs = originalCycleCount * baseDelayMs;
 
   const sequenceLength = plannedSequence.length;
-  const baseSampledDelay = Math.floor(targetTotalDurationMs / sequenceLength);
-  const remainderDelay = targetTotalDurationMs % sequenceLength;
+  // GIF 규격의 1/100초(10ms = 1 tick) 단위로 변환하여 분배
+  const targetTicks = Math.round(targetTotalDurationMs / 10);
+  const baseTicks = Math.floor(targetTicks / sequenceLength);
+  const remainderTicks = targetTicks % sequenceLength;
 
   // 5. 프레임별 딜레이 주입 (첫/마지막 프레임 정지시간 반영)
   const frames: PlannedFrame[] = plannedSequence.map((item, idx) => {
-    // 나머지 딜레이(remainderDelay)를 앞쪽 프레임들에 1ms씩 고르게 배분하여 총합을 100% 일치시킴
-    const frameStandardDelay = baseSampledDelay + (idx < remainderDelay ? 1 : 0);
+    // 10ms(1 tick) 단위로 균등 분배하여 PreviewPlayer와 실제 GIF(gifenc) 출력 타이밍을 100% 일치시킴
+    const frameTicks = Math.max(2, baseTicks + (idx < remainderTicks ? 1 : 0));
+    const frameStandardDelay = frameTicks * 10;
     let delayMs = frameStandardDelay;
 
     if (item.isFirst && mergedConfig.firstFramePauseMs > 0) {
-      delayMs = Math.max(frameStandardDelay, mergedConfig.firstFramePauseMs);
+      delayMs = Math.max(frameStandardDelay, Math.round(mergedConfig.firstFramePauseMs / 10) * 10);
     } else if (
       (item.isLast || item.isTurnaround) &&
       mergedConfig.lastFramePauseMs > 0
     ) {
-      delayMs = Math.max(frameStandardDelay, mergedConfig.lastFramePauseMs);
+      delayMs = Math.max(frameStandardDelay, Math.round(mergedConfig.lastFramePauseMs / 10) * 10);
     }
 
     return {

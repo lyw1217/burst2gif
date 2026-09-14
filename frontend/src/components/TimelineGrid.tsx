@@ -201,6 +201,9 @@ export const TimelineGrid: React.FC<Props> = ({
     if (window.confirm('모든 사진을 타임라인에서 제거하시겠습니까?')) {
       thumbnailManager.clear();
       onFilesChange([]);
+      if (onResetTrim) {
+        onResetTrim();
+      }
       if (onTrimRangeChange) {
         onTrimRangeChange([0, 0]);
       }

@@ -140,10 +140,11 @@ describe('PlaybackPlan Module', () => {
       const totalDelay = plan.frames.reduce((sum, f) => sum + f.delayMs, 0);
       const originalTotalMs = 5 * 100; // 500ms
       expect(totalDelay).toBe(originalTotalMs);
-      // 500 / 3 = 166.66ms -> [167, 167, 166] ms
-      expect(plan.frames[0].delayMs).toBe(167);
-      expect(plan.frames[1].delayMs).toBe(167);
-      expect(plan.frames[2].delayMs).toBe(166);
+      // 500ms (50 ticks) / 3 frames = 16 ticks (160ms) + 2 remainder ticks (20ms) -> [170, 170, 160] ms
+      expect(plan.frames[0].delayMs).toBe(170);
+      expect(plan.frames[1].delayMs).toBe(170);
+      expect(plan.frames[2].delayMs).toBe(160);
+      expect(plan.frames.every((f) => f.delayMs % 10 === 0)).toBe(true);
     });
 
     // 2. 6장 사진 + 스킵 2 (프레임 수가 스킵 값의 배수인 경우)
@@ -164,6 +165,7 @@ describe('PlaybackPlan Module', () => {
       const originalTotalMs = 6 * 100; // 600ms
       expect(totalDelay).toBe(originalTotalMs);
       expect(plan.frames.every((f) => f.delayMs === 200)).toBe(true);
+      expect(plan.frames.every((f) => f.delayMs % 10 === 0)).toBe(true);
     });
 
     // 3. 7장 사진 + 스킵 3
@@ -183,10 +185,11 @@ describe('PlaybackPlan Module', () => {
       const totalDelay = plan.frames.reduce((sum, f) => sum + f.delayMs, 0);
       const originalTotalMs = 7 * 100; // 700ms
       expect(totalDelay).toBe(originalTotalMs);
-      // 700 / 3 = 233.33ms -> [234, 233, 233] ms
-      expect(plan.frames[0].delayMs).toBe(234);
-      expect(plan.frames[1].delayMs).toBe(233);
-      expect(plan.frames[2].delayMs).toBe(233);
+      // 700ms (70 ticks) / 3 frames = 23 ticks (230ms) + 1 remainder tick (10ms) -> [240, 230, 230] ms
+      expect(plan.frames[0].delayMs).toBe(240);
+      expect(plan.frames[1].delayMs).toBe(230);
+      expect(plan.frames[2].delayMs).toBe(230);
+      expect(plan.frames.every((f) => f.delayMs % 10 === 0)).toBe(true);
     });
 
     // 4. 시작/끝 구간 트리밍 + 5장 사진 + 스킵 2
@@ -206,9 +209,10 @@ describe('PlaybackPlan Module', () => {
       const totalDelay = plan.frames.reduce((sum, f) => sum + f.delayMs, 0);
       const originalTotalMs = 5 * 100; // 500ms
       expect(totalDelay).toBe(originalTotalMs);
-      expect(plan.frames[0].delayMs).toBe(167);
-      expect(plan.frames[1].delayMs).toBe(167);
-      expect(plan.frames[2].delayMs).toBe(166);
+      expect(plan.frames[0].delayMs).toBe(170);
+      expect(plan.frames[1].delayMs).toBe(170);
+      expect(plan.frames[2].delayMs).toBe(160);
+      expect(plan.frames.every((f) => f.delayMs % 10 === 0)).toBe(true);
     });
 
     // 5. 왕복(Ping-Pong) 재생 + 스킵 조합
