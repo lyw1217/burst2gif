@@ -93,7 +93,9 @@ class ThumbnailManager {
       return objectUrl;
     } catch (err) {
       // 만약 createImageBitmap 옵션 미지원 등의 경우 fallback
-      return URL.createObjectURL(file);
+      const fallbackUrl = URL.createObjectURL(file);
+      this.cache.set(id, fallbackUrl);
+      return fallbackUrl;
     }
   }
 

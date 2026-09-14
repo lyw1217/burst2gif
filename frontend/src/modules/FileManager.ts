@@ -12,7 +12,7 @@ export interface ManagedFile {
   isLandscape?: boolean;
 }
 
-export const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.bmp'];
+export const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 export const MAX_FILES = 1000;
 export const MAX_SINGLE_FILE_SIZE = 250 * 1024 * 1024; // 250MB
 export const MAX_TOTAL_FILE_SIZE = 10 * 1024 * 1024 * 1024; // 10GB

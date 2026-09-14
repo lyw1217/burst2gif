@@ -25,7 +25,7 @@
 
 ---
 
-## 🚀 사용 흐름
+## 🚀 사용 흐름 & 주요 기능
 
 ```text
 사이트 접속
@@ -34,14 +34,19 @@
    ↓
 사진 자동 자연수 정렬 (img1, img2, img10)
    ↓
-실시간 미리보기 & 타임라인 순서 편집
+타임라인 편집 & 재생 제어
+  - ✂️ 시작/끝 구간 지정 (원하는 구간만 핀포인트 추출)
+  - 🔄 재생 모드: 순방향(1→2→3→1) 또는 왕복(Ping-Pong, 1→2→3→2→1)
+  - 🔁 반복 횟수: 무한 반복, 1회 재생, 2회/3회 등
+  - ⏩ 프레임 건너뛰기: 2장/3장마다 1장 (재생 시간 유지 + 용량 대폭 절감)
+  - ⏱️ 첫/마지막(반환점) 정지 시간 설정 (0.25s, 0.5s, 1s 등)
    ↓
-속도 및 크기 선택
-  - 보통 화질 : 1280px (기본 추천)
-  - 작은 용량 : 960px  (메신저/공유)
-  - 고화질   : 1920px (PC 감상)
+화질 및 화면 연출 옵션
+  - 출력 크기: 960px (작은 용량), 1280px (보통 화질), 1920px (선명하게)
+  - 화면 맞춤: 화면에 맞추기(여백 색상: 검정/흰색/그레이) vs 화면 채우기(크롭 기준 위치 조절)
+  - 사진 품질 우선 모드: Floyd-Steinberg 디더링 적용으로 256색 그라데이션 밴딩 완화
    ↓
-[GIF 만들기] ➔ 1장씩 안정적 스트리밍 인코딩
+[GIF 만들기] ➔ 1장씩 안정적 스트리밍 인코딩 (WorkPixels 안전장치 탑재)
    ↓
 미리보기 확인 및 [다운로드]
 ```
@@ -51,7 +56,7 @@
 ## 🛡️ 작업량 기반 안전장치 (WorkPixels)
 
 ```text
-WorkPixels = outputWidth × outputHeight × frameCount
+WorkPixels = outputWidth × outputHeight × plan.encodedFrameCount
 ```
 - **≤ 250M (일반)**: 안전하게 즉시 생성
 - **250M ~ 600M (무거움)**: 정상 생성 (처리 시간 안내)
@@ -63,24 +68,27 @@ WorkPixels = outputWidth × outputHeight × frameCount
 ## 💻 로컬 개발 및 빌드
 
 ```bash
-# 1. 프론트엔드 의존성 설치
+# 1. 의존성 설치
 cd frontend
 npm install
 
 # 2. 로컬 개발 서버 기동
 npm run dev
 
-# 3. 무결성 타입 검사
+# 3. 자동화 단위 테스트 실행 (Vitest 19개 검증)
 npm test
 
-# 4. 정적 프로덕션 번들 빌드
+# 4. TypeScript 타입 무결성 검사
+npm run typecheck
+
+# 5. 정적 프로덕션 번들 빌드
 npm run build
 ```
 
-빌드된 `frontend/dist` 디렉토리는 별도의 백엔드 없이 **GitHub Pages**, **Vercel**, **Netlify**, **Cloudflare Pages** 등 정적 호스팅 서비스 어디에나 그대로 올려 즉시 배포할 수 있습니다.
+루트 디렉토리의 `./test.sh`를 통해서도 단위 테스트, 타입 검사, 프로덕션 빌드를 한 번에 자동 검증할 수 있습니다.
 
 ---
 
 ## 📦 기존 백엔드(Python + FFmpeg) 버전 안내
 
-기존의 Python/FastAPI + FFmpeg 2-Pass 백엔드 기반 코드는 **[`archive/backend-version`](https://github.com/lyw1217/burst2gif/tree/archive/backend-version)** 브랜치에 안전하게 보존되어 있습니다. 필요 시 언제든지 해당 브랜치로 전환하여 로컬 배치 스크립트(`run.bat`, `run.sh`)를 이용하실 수 있습니다.
+기존의 Python/FastAPI + FFmpeg 2-Pass 백엔드 기반 코드는 **[`archive/backend-version`](https://github.com/lyw1217/burst2gif/tree/archive/backend-version)** 브랜치에 안전하게 보존되어 있습니다. 필요 시 언제든지 해당 브랜치로 전환하여 로컬 배치 스크립트를 이용하실 수 있습니다.

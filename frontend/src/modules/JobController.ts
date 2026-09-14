@@ -1,12 +1,6 @@
-import { WorkerInMessage, WorkerOutMessage } from '../types/worker';
+import { WorkerInMessage, WorkerOutMessage, JobEncodingOptions } from '../types/worker';
 
-export interface JobOptions {
-  targetWidth: number;
-  targetHeight: number;
-  fps: number;
-  loop: number;
-  fitMode: 'contain' | 'cover';
-}
+export type JobOptions = JobEncodingOptions;
 
 export interface JobProgress {
   currentFrame: number;

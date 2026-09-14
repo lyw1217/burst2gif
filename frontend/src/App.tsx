@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
 import { InputSection } from './components/InputSection';
 import { TimelineGrid } from './components/TimelineGrid';
@@ -11,6 +11,7 @@ import { ManagedFile } from './modules/FileManager';
 import { jobController, JobProgress, JobResult } from './modules/JobController';
 import { calculateOutputDimensions } from './modules/RiskEvaluator';
 import { cleanupOldOPFSTempFiles, checkStorageQuota } from './modules/OutputSink';
+import { generatePlaybackPlan, PlaybackMode } from './modules/PlaybackPlan';
 import { AlertTriangle, AlertCircle, X } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -19,7 +20,16 @@ export const App: React.FC = () => {
   const [fps, setFps] = useState<number>(12);
   const [targetLongEdge, setTargetLongEdge] = useState<number>(1280); // 기본값: 1280px (보통 화질)
   const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain');
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('forward');
   const [loop, setLoop] = useState<number>(0); // 0 = 무한 반복
+  const [frameSkip, setFrameSkip] = useState<number>(1); // 1 = 전체, 2 = 2장마다 1장...
+  const [trimRange, setTrimRange] = useState<[number, number]>([0, 0]);
+  const [firstFramePauseMs, setFirstFramePauseMs] = useState<number>(0);
+  const [lastFramePauseMs, setLastFramePauseMs] = useState<number>(0);
+  const [backgroundColor, setBackgroundColor] = useState<string>('#000000');
+  const [coverPosition, setCoverPosition] = useState<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
+  const [qualityMode, setQualityMode] = useState<'fast' | 'high'>('fast');
+
   const [aspectDimensions, setAspectDimensions] = useState<{ width: number; height: number }>({ width: 3, height: 2 });
   const [hasMixedOrientations, setHasMixedOrientations] = useState<boolean>(false);
 
@@ -33,6 +43,19 @@ export const App: React.FC = () => {
   useEffect(() => {
     cleanupOldOPFSTempFiles();
   }, []);
+
+  // 파일 목록 변경 시 Trim 범위 보정
+  useEffect(() => {
+    if (files.length > 0) {
+      setTrimRange(([s, e]) => {
+        const validStart = Math.min(Math.max(0, s), files.length - 1);
+        const validEnd = e === 0 && s === 0 ? files.length - 1 : Math.min(Math.max(validStart, e), files.length - 1);
+        return [validStart, validEnd];
+      });
+    } else {
+      setTrimRange([0, 0]);
+    }
+  }, [files.length]);
 
   // 첫 번째 사진의 실제 종횡비 자동 감지 및 가로/세로 혼합 여부 전수 판별
   useEffect(() => {
@@ -66,14 +89,39 @@ export const App: React.FC = () => {
     targetLongEdge
   );
 
+  // 공통 재생 계획(PlaybackPlan) 생성: Preview와 Worker가 100% 동일한 순서/속도 사용
+  const plan = useMemo(() => {
+    return generatePlaybackPlan(files.length, {
+      fps,
+      playbackMode,
+      frameSkip,
+      trimRange,
+      firstFramePauseMs,
+      lastFramePauseMs,
+      loop,
+    });
+  }, [
+    files.length,
+    fps,
+    playbackMode,
+    frameSkip,
+    trimRange,
+    firstFramePauseMs,
+    lastFramePauseMs,
+    loop,
+  ]);
+
   // GIF 만들기 시작
   const handleStartConvert = async () => {
-    if (files.length === 0 || isProcessing) return;
+    if (files.length === 0 || plan.encodedFrameCount === 0 || isProcessing) return;
 
     setErrorMessage(null);
 
     // 1. 브라우저 임시 스토리지 Quota 사전 확인 (작업 크기에 따른 동적 계산)
-    const estimatedNeededBytes = Math.min(500 * 1024 * 1024, Math.max(50 * 1024 * 1024, files.length * 2 * 1024 * 1024));
+    const estimatedNeededBytes = Math.min(
+      500 * 1024 * 1024,
+      Math.max(50 * 1024 * 1024, plan.encodedFrameCount * 2 * 1024 * 1024)
+    );
     const quotaCheck = await checkStorageQuota(estimatedNeededBytes);
     if (!quotaCheck.ok) {
       setErrorMessage(
@@ -86,9 +134,9 @@ export const App: React.FC = () => {
     setJobResult(null);
     setJobProgress({
       currentFrame: 0,
-      totalFrames: files.length,
+      totalFrames: plan.encodedFrameCount,
       currentBytes: 0,
-      fileName: files[0]?.name || '',
+      fileName: files[plan.frames[0]?.sourceIndex]?.name || '',
       percent: 0,
     });
 
@@ -102,6 +150,10 @@ export const App: React.FC = () => {
         fps,
         loop,
         fitMode,
+        backgroundColor,
+        coverPosition,
+        qualityMode,
+        plan,
       },
       (progress) => {
         setJobProgress(progress);
@@ -145,6 +197,7 @@ export const App: React.FC = () => {
               <span>{notification}</span>
             </div>
             <button
+              type="button"
               onClick={() => setNotification(null)}
               className="text-indigo-400 hover:text-white p-1 rounded-lg hover:bg-indigo-500/20 transition"
             >
@@ -167,6 +220,7 @@ export const App: React.FC = () => {
               </div>
             </div>
             <button
+              type="button"
               onClick={() => setErrorMessage(null)}
               className="text-rose-400 hover:text-white p-1 rounded-lg hover:bg-rose-500/20 transition"
             >
@@ -191,12 +245,14 @@ export const App: React.FC = () => {
 
         {files.length > 0 && (
           <div className="space-y-6 animate-in fade-in duration-200">
-            {/* 2. 전체 폭 (12열): 타임라인 그리드 시퀀스 */}
+            {/* 2. 전체 폭 (12열): 타임라인 그리드 시퀀스 및 구간 트리밍 */}
             <TimelineGrid
               files={files}
               onFilesChange={setFiles}
               selectedFrameIndex={selectedFrame}
               onSelectFrame={setSelectedFrame}
+              trimRange={trimRange}
+              onTrimRangeChange={setTrimRange}
             />
 
             {/* 3. 하단 2열 레이아웃: 대형 1:1 미리보기(7열) + 옵션 패널(5열) */}
@@ -204,26 +260,42 @@ export const App: React.FC = () => {
               <div className="lg:col-span-7">
                 <PreviewPlayer
                   files={files}
-                  fps={fps}
+                  plan={plan}
                   currentFrame={selectedFrame}
                   setCurrentFrame={setSelectedFrame}
                   targetWidth={targetWidth}
                   targetHeight={targetHeight}
                   fitMode={fitMode}
+                  backgroundColor={backgroundColor}
+                  coverPosition={coverPosition}
                 />
               </div>
 
               <div className="lg:col-span-5">
                 <ControlPanel
-                  fileCount={files.length}
+                  plan={plan}
                   fps={fps}
                   onFpsChange={setFps}
                   targetLongEdge={targetLongEdge}
                   onTargetLongEdgeChange={setTargetLongEdge}
                   fitMode={fitMode}
                   onFitModeChange={setFitMode}
+                  playbackMode={playbackMode}
+                  onPlaybackModeChange={setPlaybackMode}
                   loop={loop}
                   onLoopChange={setLoop}
+                  frameSkip={frameSkip}
+                  onFrameSkipChange={setFrameSkip}
+                  firstFramePauseMs={firstFramePauseMs}
+                  onFirstFramePauseChange={setFirstFramePauseMs}
+                  lastFramePauseMs={lastFramePauseMs}
+                  onLastFramePauseChange={setLastFramePauseMs}
+                  backgroundColor={backgroundColor}
+                  onBackgroundColorChange={setBackgroundColor}
+                  coverPosition={coverPosition}
+                  onCoverPositionChange={setCoverPosition}
+                  qualityMode={qualityMode}
+                  onQualityModeChange={setQualityMode}
                   onSubmit={handleStartConvert}
                   isProcessing={isProcessing}
                   aspectDimensions={aspectDimensions}

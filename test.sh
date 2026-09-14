@@ -6,7 +6,6 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$SCRIPT_DIR/backend"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
 
 echo "============================================================"
@@ -14,29 +13,28 @@ echo "  Burst2Gif Automated Integrity Tests (macOS / Linux)"
 echo "============================================================"
 echo ""
 
-PYTHON_CMD="python3"
-if [ -f "$BACKEND_DIR/venv/bin/python" ]; then
-    PYTHON_CMD="$BACKEND_DIR/venv/bin/python"
-elif ! command -v python3 &> /dev/null && command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-fi
-
-echo "[1/2] Running backend unit and API tests..."
-cd "$BACKEND_DIR"
-$PYTHON_CMD -m unittest discover tests -v
-echo "✅ [1/2] Backend tests passed!"
-echo ""
-
-echo "[2/2] Checking frontend TypeScript and reference integrity..."
 cd "$FRONTEND_DIR"
+
 if command -v npm &> /dev/null; then
+    echo "[1/3] Running Vitest unit test suite..."
     npm test
-    echo "✅ [2/2] Frontend integrity checks passed!"
+    echo "✅ [1/3] Unit tests passed!"
+    echo ""
+
+    echo "[2/3] Checking TypeScript type integrity..."
+    npm run typecheck
+    echo "✅ [2/3] TypeScript checks passed!"
+    echo ""
+
+    echo "[3/3] Checking production bundle build..."
+    npm run build
+    echo "✅ [3/3] Production build check passed!"
+    echo ""
 else
-    echo "⚠️  [WARNING] npm not found. Skipping frontend test."
+    echo "❌ [ERROR] npm is not installed or not in PATH."
+    exit 1
 fi
-echo ""
 
 echo "============================================================"
-echo "  🎉 [SUCCESS] All backend and frontend tests passed!"
+echo "  🎉 [SUCCESS] All Burst2Gif automated tests passed!"
 echo "============================================================"
