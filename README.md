@@ -1,5 +1,7 @@
 # Burst2Gif (무설치 브라우저 전용 연사 사진 GIF 변환기)
 
+> **보관됨 (2026-10-01)** — Burst2Gif 개발은 [lyw1217/hotshoe](https://github.com/lyw1217/hotshoe)의 `apps/burst2gif`에서 이어집니다. 이 저장소는 읽기 전용으로 보관합니다.
+
 👉 **웹사이트 바로가기**: **[https://burst2gif.vercel.app](https://burst2gif.vercel.app)**
 
 > **🔒 사진은 서버로 업로드되지 않습니다.**  
